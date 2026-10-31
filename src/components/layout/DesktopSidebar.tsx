@@ -1,7 +1,9 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../../context/LanguageContext';
 import { useWedding } from '../../context/WeddingContext';
+import { useAuth } from '../../context/useAuth';
+import { Badge } from '../common/Badge';
 import {
   LayoutDashboard,
   Receipt,
@@ -15,11 +17,21 @@ import {
   Heart,
   Crown,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 
 export const DesktopSidebar: React.FC = () => {
   const { t, language } = useTranslation();
   const { summary } = useWedding();
+  const { user, family, signOut, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    if (window.confirm(t.auth.signOutConfirm)) {
+      await signOut();
+      navigate('/welcome');
+    }
+  };
 
   const navItems = [
     { to: '/', label: t.nav.dashboard, icon: LayoutDashboard },
@@ -30,8 +42,13 @@ export const DesktopSidebar: React.FC = () => {
     { to: '/checklist', label: t.nav.checklist, icon: CheckSquare },
     { to: '/reports', label: t.nav.reports, icon: BarChart3 },
     { to: '/smartscan', label: t.nav.smartscan, icon: ScanLine },
+    { to: '/family', label: t.nav.family, icon: Users, roleRestricted: false },
     { to: '/settings', label: t.nav.settings, icon: Settings },
   ];
+
+  const brideDisplay = family?.bride_name || summary.brideName;
+  const groomDisplay = family?.groom_name || summary.groomName;
+  const weddingDateDisplay = family?.wedding_date || summary.weddingDate;
 
   return (
     <aside
@@ -58,15 +75,41 @@ export const DesktopSidebar: React.FC = () => {
         <div className="mt-4 p-2.5 rounded-xl bg-rose/30 border border-gold/30">
           <div className="flex items-center gap-1.5 text-xs font-bold text-burgundy">
             <Heart className="w-3.5 h-3.5 text-burgundy fill-burgundy" />
-            <span className="truncate">{summary.brideName} & {summary.groomName}</span>
+            <span className="truncate">{brideDisplay} & {groomDisplay}</span>
           </div>
           <div className="text-[11px] text-charcoal-muted mt-1 flex items-center justify-between">
-            <span>{summary.weddingDate}</span>
+            <span>{weddingDateDisplay}</span>
             <span className="px-1.5 py-0.5 rounded-full bg-gold/20 text-gold-dark font-semibold text-[10px]">
               48 {language === 'hi' ? 'दिन शेष' : 'days to go'}
             </span>
           </div>
         </div>
+
+        {/* Authenticated User Status Chip */}
+        {isAuthenticated && user && (
+          <div className="mt-3 pt-3 border-t border-gold/20 flex items-center justify-between">
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-burgundy block truncate">
+                {user.name}
+              </span>
+              <Badge
+                variant={user.role === 'OWNER' ? 'burgundy' : user.role === 'FAMILY_MEMBER' ? 'gold' : 'outline'}
+                size="sm"
+                className="mt-0.5"
+              >
+                {user.role === 'OWNER' ? t.family.roleOwner : user.role === 'FAMILY_MEMBER' ? t.family.roleMember : t.family.roleViewer}
+              </Badge>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="p-1.5 rounded-lg text-charcoal-muted hover:text-burgundy hover:bg-rose/40 cursor-pointer"
+              title={t.auth.signOutBtn}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Navigation Links */}
@@ -113,7 +156,7 @@ export const DesktopSidebar: React.FC = () => {
 
       {/* Footer / Invitation Info */}
       <div className="p-4 border-t border-gold/20 bg-ivory-light/70 text-xs">
-        <div className="flex items-center gap-2 text-charcoal-muted mb-2">
+        <div className="flex items-center gap-2 text-charcoal-muted mb-1">
           <Sparkles className="w-3.5 h-3.5 text-gold-dark" />
           <span className="font-semibold text-burgundy text-[11px] uppercase tracking-wider">
             {t.common.invitationOnly}
@@ -121,8 +164,8 @@ export const DesktopSidebar: React.FC = () => {
         </div>
         <p className="text-[11px] text-charcoal-muted/90 leading-tight">
           {language === 'hi'
-            ? 'गोपनीय पारिवारिक वास्तुकला। शून्य सार्वजनिक पंजीकरण।'
-            : 'Confidential family architecture. Zero public signups.'}
+            ? 'सत्र पृथक्करण एवं परिवार-आधारित सुरक्षा सक्रिय।'
+            : 'Multi-device isolation & family-level RBAC active.'}
         </p>
       </div>
     </aside>

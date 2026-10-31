@@ -34,3 +34,10 @@ dist-ssr/
 # Testing
 coverage/
 .vitest/
+
+# SQLite Database & Local Data
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

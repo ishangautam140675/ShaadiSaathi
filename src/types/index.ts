@@ -1,3 +1,5 @@
+export * from './auth';
+
 export type Language = 'en' | 'hi';
 
 export type ExpenseCategory =

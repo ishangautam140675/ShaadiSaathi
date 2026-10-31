@@ -3,7 +3,7 @@
 > **"Every Moment Special. Every Rupee Accounted For."**  
 > *"हर पल ख़ास, हर रुपये का हिसाब।"*
 
-ShaadiSaathi is a premium, bilingual Progressive Web App (PWA) designed for Indian families to manage their complete wedding budget, expenses, shopping lists, vendor contracts, advance payments, traditional Shagun blessings, and preparation timelines with zero mandatory subscription costs.
+ShaadiSaathi is a premium, bilingual Progressive Web App (PWA) designed for Indian families to collaboratively manage their complete wedding budget, expenses, shopping lists, vendor contracts, advance payments, traditional Shagun blessings, and preparation timelines with zero mandatory subscription costs.
 
 ---
 
@@ -19,8 +19,9 @@ Built with a dedicated luxury Indian wedding palette:
 
 ---
 
-## 🚀 Key Features Delivered in Phase 1
+## 🚀 Key Features Delivered Across Phases
 
+### Phase 1: Foundation, Design System & Responsive Shell
 1. **Responsive Application Shell:**
    - **Desktop:** Elegant left sidebar with wedding crest, countdown, active state indicators, and top utility header.
    - **Mobile:** Touch-friendly bottom navigation bar, compact header, and slide-out drawer for auxiliary screens.
@@ -37,25 +38,45 @@ Built with a dedicated luxury Indian wedding palette:
    - **Settings Screen (`/settings`):** Language preferences, wedding profile, role breakdown, and zero-cost architecture status.
 3. **Bilingual Localization (English & हिन्दी):**
    - Instant UI switching between English and natural Devanagari Hindi.
-   - Persisted in `localStorage`.
-   - Switching language preserves user-entered vendor names and custom descriptions.
-4. **Honest Engineering Modes:**
-   - One-click toggle between **Sample Development Preview Data** and **Clean First-Time Empty State**.
-   - Transparent Phase 1 modals that validate forms and honestly explain that permanent database persistence will be integrated in Phase 2.
-5. **PWA & Offline-Capable Setup:**
+   - Persisted in `localStorage` and synchronized with document `lang` attributes.
+4. **PWA & Offline-Capable Setup:**
    - Auto-updating service worker via `vite-plugin-pwa` precaching all assets for offline launchability.
+
+### Phase 2: Secure Authentication, Family Invitations & Role-Based Access
+1. **Multi-Device Independent Sessions:**
+   - Real, isolated authentication sessions per device.
+   - Logging in on a mobile phone does not interfere with a laptop session; signing out on one device leaves other authorized family members uninterrupted.
+2. **First-Time Primary Owner Setup Wizard (`/setup`):**
+   - Replay-protected setup endpoint initializes the family wedding sanctuary and creates the primary Owner account.
+   - No hardcoded passwords, no insecure default accounts.
+3. **Invitation-Only Onboarding (`/invite/:token`):**
+   - 32-byte cryptographically secure random tokens (`crypto.randomBytes(32)`), stored exclusively as SHA-256 hashes.
+   - Single-use atomic acceptance, configurable expiration (7, 14, 30 days), and immediate revocation.
+   - One-click copy and direct WhatsApp invite link generation.
+   - Role escalation prevention: invitations can only provision `FAMILY_MEMBER` or `VIEWER` access.
+4. **Server-Enforced Role-Based Access Control (RBAC):**
+   - **Owner / Admin:** Can manage family members, issue/revoke invitation tokens, update roles, and manage wedding configurations. Protected against last-owner removal or demotion.
+   - **Family Member:** Can view and record wedding finances, shopping, and tasks.
+   - **Viewer:** Read-only access to authorized schedules, checklists, and reports.
+5. **Zero-Dependency Native SQLite Engine:**
+   - Leverages Node 24's built-in `node:sqlite` (`DatabaseSync`), requiring zero native C++ compiler tools.
+   - Fully ANSI-SQL compatible with Cloudflare D1 for future cloud migration.
+6. **Brute-Force Rate Limiting:**
+   - Sliding-window rate limiter protecting `/api/auth/sign-in` (5 attempts per 15-minute window).
 
 ---
 
 ## 🛠️ Technology Stack
 
 - **Frontend:** React 19, TypeScript (Strict Mode)
+- **Backend:** Node.js 24, Express 4.x
+- **Database:** Node 24 Native SQLite (`node:sqlite`) / Cloudflare D1 compatible
 - **Bundler:** Vite 8
 - **Styling:** Tailwind CSS v4 with custom color variables
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
 - **PWA:** `vite-plugin-pwa`
-- **Testing:** Vitest, React Testing Library, JSDOM
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (23 automated tests)
 - **Linter:** Oxlint (0 errors, 0 warnings)
 
 ---
@@ -63,7 +84,7 @@ Built with a dedicated luxury Indian wedding palette:
 ## 📦 Getting Started
 
 ### Prerequisites
-- Node.js &ge; 20.x (Recommended: v24.x)
+- Node.js &ge; 24.x (Recommended: Node 24 LTS)
 - npm &ge; 10.x
 
 ### 1. Installation
@@ -71,23 +92,28 @@ Built with a dedicated luxury Indian wedding palette:
 npm install
 ```
 
-### 2. Run Development Server
+### 2. Run Development Server (with integrated API backend)
 ```bash
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in your browser. The Vite development server automatically mounts the Express API middleware under `/api`.
 
-### 3. Run Automated Tests
+### 3. Run Standalone API Server
+```bash
+npm run server
+```
+
+### 4. Run Automated Tests
 ```bash
 npm run test
 ```
 
-### 4. Run Linter
+### 5. Run Linter
 ```bash
 npm run lint
 ```
 
-### 5. Build for Production
+### 6. Build for Production
 ```bash
 npm run build
 ```
@@ -100,8 +126,8 @@ Production assets are generated in `dist/` with service worker bundles (`dist/sw
 ShaadiSaathi is architected to run on permanent, verified free tiers without automatic paid upgrades:
 
 - **Frontend Hosting:** Cloudflare Pages (Unlimited bandwidth, global CDN, free SSL).
-- **Future API & Storage (Phase 2):** Cloudflare Workers (100,000 free requests/day) + Cloudflare D1 (5,000,000 free row reads/day, 5 GB storage).
-- **Data Portability (Phase 6):** Standard SQLite schema allows migrating all wedding records to any server or downloading a complete JSON/CSV archive anytime.
+- **Backend API & Database:** Cloudflare Workers (100,000 free requests/day) + Cloudflare D1 (5,000,000 free row reads/day, 5 GB storage) or lightweight Node VPS/container.
+- **Data Portability:** Standard SQLite schema allows migrating all wedding records to any server or downloading a complete JSON/CSV archive anytime.
 
 See [FREE_DEPLOYMENT_PLAN.md](file:///d:/ShadiAPP/FREE_DEPLOYMENT_PLAN.md) and [PROJECT_ARCHITECTURE.md](file:///d:/ShadiAPP/PROJECT_ARCHITECTURE.md) for full architectural documentation.
 
@@ -116,13 +142,17 @@ See [FREE_DEPLOYMENT_PLAN.md](file:///d:/ShadiAPP/FREE_DEPLOYMENT_PLAN.md) and [
 | 10 Interactive Screens & Navigation | ✅ Complete | Phase 1 |
 | Honest Empty States & Sample Preview Toggle | ✅ Complete | Phase 1 |
 | Form Validation & Local Session Preview | ✅ Complete | Phase 1 |
-| Vitest Automated Testing Suite (13 tests) | ✅ Complete | Phase 1 |
-| Secure Invite-Only Family Accounts & Auth | ⏳ Planned | Phase 2 |
-| Cloudflare D1 / SQLite Database Persistence | ⏳ Planned | Phase 2 |
-| Offline IndexedDB Synchronization & Conflict Resolution | ⏳ Planned | Phase 3 |
-| Exportable PDF & Excel Financial Reports | ⏳ Planned | Phase 4 |
-| SmartScan WebAssembly OCR Receipt Extraction | ⏳ Planned | Phase 5 |
-| Full JSON/CSV Wedding Archive Backup & Restore | ⏳ Planned | Phase 6 |
+| Secure Multi-Device Authentication & Sessions | ✅ Complete | Phase 2 |
+| Replay-Protected First-Admin Setup Wizard | ✅ Complete | Phase 2 |
+| Cryptographic Single-Use Family Invitations | ✅ Complete | Phase 2 |
+| Role-Based Access Control (Owner / Member / Viewer) | ✅ Complete | Phase 2 |
+| Native SQLite Database & Brute-Force Protection | ✅ Complete | Phase 2 |
+| Automated Test Suite (23/23 tests passing) | ✅ Complete | Phase 1 & 2 |
+| Wedding Budget, Expenses & Vendor Persistence | ⏳ Planned | Phase 3 |
+| Offline IndexedDB Synchronization & Conflict Resolution | ⏳ Planned | Phase 4 |
+| Exportable PDF & Excel Financial Reports | ⏳ Planned | Phase 5 |
+| SmartScan WebAssembly OCR Receipt Extraction | ⏳ Planned | Phase 6 |
+| Full JSON/CSV Wedding Archive Backup & Restore | ⏳ Planned | Phase 7 |
 
 ---
 

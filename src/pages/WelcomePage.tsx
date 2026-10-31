@@ -25,7 +25,11 @@ export const WelcomePage: React.FC = () => {
 
   const handleVerifyInvite = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsInviteModalOpen(true);
+    if (inviteCode.trim()) {
+      navigate(`/invite/${encodeURIComponent(inviteCode.trim())}`);
+    } else {
+      setIsInviteModalOpen(true);
+    }
   };
 
   return (
@@ -73,14 +77,25 @@ export const WelcomePage: React.FC = () => {
         {/* Entry Actions Box */}
         <div className="w-full max-w-md bg-ivory-light border border-gold/40 rounded-2xl p-6 shadow-xl space-y-5">
           {/* Direct Demo / Shell Entry */}
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="w-full py-3.5 px-6 rounded-xl bg-burgundy hover:bg-burgundy-dark text-ivory font-bold text-sm sm:text-base transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 group cursor-pointer"
-          >
-            <span>{t.welcome.enterApp}</span>
-            <ArrowRight className="w-4 h-4 text-gold-light group-hover:translate-x-1 transition-transform" />
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="w-full py-3 px-4 rounded-xl bg-burgundy hover:bg-burgundy-dark text-ivory font-bold text-xs sm:text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group cursor-pointer"
+            >
+              <span>{t.welcome.enterApp}</span>
+              <ArrowRight className="w-3.5 h-3.5 text-gold-light group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/sign-in')}
+              className="w-full py-3 px-4 rounded-xl border border-gold/50 bg-ivory text-burgundy hover:bg-rose/40 font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5 text-gold-dark" />
+              <span>{t.nav.signIn}</span>
+            </button>
+          </div>
 
           <div className="relative flex items-center justify-center">
             <div className="border-t border-gold/30 w-full" />

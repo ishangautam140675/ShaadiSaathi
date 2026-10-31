@@ -1,6 +1,6 @@
 # ShaadiSaathi &bull; Project Architecture Document
 
-**Version:** 1.0.0-phase1  
+**Version:** 2.0.0-phase2  
 **Project:** ShaadiSaathi (शादीसाथी) &bull; Premium Bilingual Wedding Management Progressive Web App  
 **Tagline:** "Every Moment Special. Every Rupee Accounted For." / "हर पल ख़ास, हर रुपये का हिसाब।"
 
@@ -12,11 +12,12 @@ ShaadiSaathi is a specialized, mobile-first Progressive Web App (PWA) crafted fo
 
 ### Core Non-Negotiable Tenets
 
-1. **Zero Mandatory Subscription Costs:** Built exclusively to operate within verified, permanent modern free tiers (Cloudflare Pages, Cloudflare Workers, and Cloudflare D1 or Supabase free tier).
-2. **Zero Fake Claims or Dark Patterns:** Unfinished functionality is never disguised as operational. If persistence is slated for Phase 2, the UI honestly identifies current records as session previews.
+1. **Zero Mandatory Subscription Costs:** Built exclusively to operate within verified, permanent modern free tiers (Cloudflare Pages, Cloudflare Workers, and Cloudflare D1 or Node/SQLite servers). Zero paid dependencies, zero forced upgrades.
+2. **Zero Fake Claims or Dark Patterns:** Unfinished functionality is never disguised as operational. All implemented features are backed by real database persistence and tests.
 3. **Sacred Cultural Separation:** In Indian wedding traditions, Shagun envelopes (लिफ़ाफ़ा) and gift offerings represent auspicious blessings and are strictly decoupled from operational wedding expenses and budget deficits.
-4. **Invitation-Only Family Security:** To protect private multi-generational family finances, there is no public self-registration. Access is provisioned exclusively through secure invitation tokens issued by family administrators.
-5. **Authentic Bilingualism:** Full first-class support for English and natural Devanagari Hindi (हिन्दी), dynamically toggleable with zero layout clipping and independent from user-entered names.
+4. **Invitation-Only Family Security:** To protect private multi-generational family finances, there is no public self-registration. Access is provisioned exclusively through secure, single-use, cryptographically unpredictable invitation tokens issued by family administrators.
+5. **Multi-Device Session Isolation:** Family members on phones, tablets, and laptops maintain independent authenticated sessions. Actions, role changes, or signouts on one device never silently compromise or alter other devices.
+6. **Authentic Bilingualism:** Full first-class support for English and natural Devanagari Hindi (हिन्दी), dynamically toggleable with zero layout clipping and independent from user-entered names.
 
 ---
 
@@ -24,15 +25,17 @@ ShaadiSaathi is a specialized, mobile-first Progressive Web App (PWA) crafted fo
 
 ```
 Frontend Runtime:      React 19 + TypeScript (Strict Type Checking)
+Backend Runtime:       Node.js 24 + Express 4.x
+Database Engine:       Node 24 Built-In SQLite (DatabaseSync) - Zero Native C++ Compilation Required
 Build Tool & Bundler:  Vite 8.x
 Styling System:        Tailwind CSS v4 (Custom Luxury Wedding Palette)
 Navigation:            React Router v7
 Typography:            Cinzel, Playfair Display, Noto Sans Devanagari, Plus Jakarta Sans
 Icons:                 Lucide React (tree-shakeable SVG icons)
 PWA & Offline Engine:  vite-plugin-pwa (Service Workers, Web App Manifest)
-Testing Suite:         Vitest 5.x + React Testing Library + JSDOM
+Testing Suite:         Vitest 5.x + React Testing Library + JSDOM (Frontend & Server Integration)
 Linter:                Oxlint (0 warnings, 0 errors)
-Target Hosting:        Cloudflare Pages (Static Client) + Cloudflare Workers / D1 (API & Storage)
+Production Target:     Cloudflare Pages / Node.js Server + Cloudflare D1 / SQLite
 ```
 
 ### Directory Structure
@@ -42,190 +45,141 @@ d:/ShadiAPP/
 ├── public/
 │   ├── favicon.svg             # Auspicious Kalash crest in Burgundy & Champagne Gold
 │   └── manifest.webmanifest    # PWA installability manifest
+├── server/
+│   ├── db/
+│   │   ├── database.ts         # Native node:sqlite DatabaseSync wrapper
+│   │   └── schema.sql          # ANSI SQL schema (families, users, sessions, invitations, rate_limits)
+│   ├── middleware/
+│   │   ├── authMiddleware.ts   # Session token verification (Cookie & Bearer)
+│   │   ├── rateLimitMiddleware.ts # SQLite brute-force protection (5 attempts / 15 min)
+│   │   └── rbacMiddleware.ts   # Deny-by-default role permission guards (OWNER, FAMILY_MEMBER, VIEWER)
+│   ├── services/
+│   │   ├── authService.ts      # Setup, sign-in, session isolation, logout
+│   │   ├── cryptoService.ts    # Scrypt hashing, random salt, SHA-256 tokens, timing-safe compare
+│   │   ├── familyService.ts    # Member listing, role assignment, revocation, last-owner safeguard
+│   │   └── invitationService.ts# Single-use token generation, expiry, validation, acceptance
+│   ├── test/
+│   │   └── auth.test.ts        # Comprehensive backend integration & security tests
+│   ├── app.ts                  # Express server application & route mounting
+│   └── index.ts                # Standalone Node production server entrypoint
 ├── src/
 │   ├── components/
-│   │   ├── common/
-│   │   │   ├── Badge.tsx               # Status badges (Paid, Pending, Tailoring, etc.)
-│   │   │   ├── DevPreviewBanner.tsx    # Honest architecture mode switcher
-│   │   │   ├── EmptyState.tsx          # Clean first-time empty state with action CTAs
-│   │   │   ├── LanguageSwitcher.tsx    # English / हिन्दी switcher with persistence
-│   │   │   ├── MetricCard.tsx          # Luxury financial metric card
-│   │   │   ├── Modal.tsx               # Accessible dialog container (ESC, focus)
-│   │   │   └── PhaseNoticeModal.tsx    # Honest roadmap explanation modal
-│   │   ├── layout/
-│   │   │   ├── AppLayout.tsx           # Primary responsive shell container
-│   │   │   ├── DesktopSidebar.tsx      # Desktop navigation bar (>= 1024px)
-│   │   │   ├── MobileBottomNav.tsx     # Mobile bottom bar (< 1024px)
-│   │   │   ├── MobileDrawer.tsx        # Mobile slide-over drawer for extended screens
-│   │   │   └── TopHeader.tsx           # Global header with wedding timer & quick action
-│   │   └── modals/
-│   │       ├── AddExpenseModal.tsx     # Form-validated expense logging modal
-│   │       ├── AddShoppingModal.tsx    # Shopping item modal with estimate variance
-│   │       ├── AddVendorModal.tsx      # Vendor contract & advance tracking modal
-│   │       └── RecordShagunModal.tsx   # Sacred Shagun envelope registration modal
+│   │   ├── common/             # Reusable UI primitives (Badge, Modal, EmptyState, LanguageSwitcher)
+│   │   └── layout/             # Responsive shell (DesktopSidebar, MobileBottomNav, MobileDrawer, TopHeader)
 │   ├── context/
-│   │   ├── LanguageContext.tsx         # Bilingual i18n context + HTML sync
-│   │   ├── WeddingContext.tsx          # Central wedding state & financial calculations
-│   │   ├── useTranslation.ts           # Typed hook for translation
-│   │   └── useWedding.ts               # Typed hook for wedding data
-│   ├── data/
-│   │   └── mockData.ts                 # Authentic sample wedding data for UI evaluation
-│   ├── locales/
-│   │   ├── en.ts                       # Complete English translation catalog
-│   │   └── hi.ts                       # Complete natural Hindi translation catalog
+│   │   ├── AuthContext.tsx     # Session management, sign-in, setup, invitation acceptance
+│   │   ├── LanguageContext.tsx # Bilingual i18n context + HTML sync
+│   │   └── WeddingContext.tsx  # Central wedding state & financial calculations
+│   ├── locales/                # Complete English & Hindi dictionary mappings
 │   ├── pages/
-│   │   ├── WelcomePage.tsx             # Entry / landing page with invite token entry
-│   │   ├── DashboardPage.tsx           # Budget overview, utilization bar, quick actions
-│   │   ├── ExpensesPage.tsx            # Expense register with filters & status badges
-│   │   ├── ShoppingPage.tsx            # Trousseau & wardrobe tracking with variance
-│   │   ├── VendorsPage.tsx             # Contracts, advance balances & no-fake-payment notice
-│   │   ├── GiftsPage.tsx               # Sacred Shagun & gift register (strictly separated)
-│   │   ├── ChecklistPage.tsx           # Preparation timeline & duties from -6m to D-Day
-│   │   ├── ReportsPage.tsx             # Visual SVG charts, category breakdown & export stubs
-│   │   ├── SmartScanPage.tsx           # 4-stage receipt verification & audit staging
-│   │   └── SettingsPage.tsx            # Language switch, profile, zero-cost architecture info
-│   ├── test/
-│   │   ├── setup.ts                    # Jest-DOM matchers setup
-│   │   ├── App.test.tsx                # App rendering tests
-│   │   ├── Expenses.test.tsx           # Validation & session persistence tests
-│   │   ├── Language.test.tsx           # Language switching & persistence tests
-│   │   └── Navigation.test.tsx         # Full route navigation & banner tests
-│   ├── types/
-│   │   └── index.ts                    # TypeScript domain models & interfaces
-│   ├── App.tsx                         # Client-side router configuration
-│   ├── index.css                       # Tailwind v4 import & custom color themes
-│   └── main.tsx                        # React 19 application bootstrap
-├── .env.example
-├── .gitignore
-├── FREE_DEPLOYMENT_PLAN.md
-├── PROJECT_ARCHITECTURE.md
-├── README.md
-├── TESTING.md
-├── tsconfig.json
-└── vite.config.ts
+│   │   ├── AcceptInvitePage.tsx# /invite/:token secure onboarding screen
+│   │   ├── FamilyPage.tsx      # /family member management & invitation generator
+│   │   ├── SetupPage.tsx       # /setup first-time primary owner wizard
+│   │   ├── SignInPage.tsx      # /sign-in multi-device authentication screen
+│   │   ├── WelcomePage.tsx     # Public welcome screen with invitation-only guidance
+│   │   └── ...                 # Dashboard, Expenses, Vendors, Shopping, Shagun, Tasks, SmartScan, Settings
+│   └── test/                   # Vitest unit & integration test suites
 ```
 
 ---
 
-## 3. Visual Design System & Palette
+## 3. Database Schema & Security Architecture
 
-ShaadiSaathi implements a warm, royal wedding identity honoring Indian aesthetic heritage while retaining modern minimalist readability:
+### Relational Schema (ANSI SQLite / Cloudflare D1 Compatible)
 
-| Role | Color Name | Hex Code | Purpose & Application |
-|---|---|---|---|
-| **Primary Background** | Warm Ivory | `#FFF9F0` | Default body and screen canvas; soft on the eyes |
-| **Brand Primary** | Deep Burgundy | `#702D3D` | Key headings, active navigation, primary action buttons |
-| **Accent & Borders** | Champagne Gold | `#C5A46D` | Auspicious accents, crest borders, highlight tags |
-| **Success & Solvency** | Sage Green | `#849780` | Paid badges, budget surplus indicators, safe balances |
-| **Typography** | Charcoal | `#292725` | Primary body text with AA+ accessible contrast |
-| **Secondary Surfaces** | Soft Rose | `#EBD9D8` | Secondary cards, pill backgrounds, progress tracks |
+```sql
+-- 1. Wedding Families
+CREATE TABLE families (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  bride_name TEXT NOT NULL,
+  groom_name TEXT NOT NULL,
+  wedding_date TEXT NOT NULL,
+  total_budget REAL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-### Accessibility & Contrast
-- Visible focus rings: `outline: 2px solid #C5A46D; outline-offset: 2px`.
-- Semantic HTML tags used throughout (`header`, `main`, `aside`, `nav`, `section`, `table`, `form`).
-- Respects `prefers-reduced-motion` to disable animations for sensitive users.
-- Large, touch-friendly tap targets (&ge; 44x44px) across mobile navigation bars.
+-- 2. User Accounts
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('OWNER', 'FAMILY_MEMBER', 'VIEWER')),
+  side TEXT NOT NULL DEFAULT 'mutual' CHECK (side IN ('bride', 'groom', 'mutual')),
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
 
----
+-- 3. Multi-Device Sessions
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  family_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  ip_address TEXT,
+  user_agent TEXT,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_active_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
 
-## 4. Domain Data Models
+-- 4. Cryptographic Single-Use Invitations
+CREATE TABLE invitations (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  invited_by_user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('FAMILY_MEMBER', 'VIEWER')),
+  side TEXT NOT NULL DEFAULT 'mutual' CHECK (side IN ('bride', 'groom', 'mutual')),
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  is_revoked INTEGER NOT NULL DEFAULT 0,
+  accepted_at TEXT,
+  accepted_by_user_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (invited_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 
-```typescript
-// 1. Expense Record
-interface Expense {
-  id: string;
-  title: string;
-  amount: number;
-  category: ExpenseCategory;
-  date: string;
-  paidBy: string;
-  paidTo?: string;
-  paymentMode: 'cash' | 'upi' | 'bank_transfer' | 'cheque' | 'card';
-  status: 'paid' | 'pending' | 'partial';
-  notes?: string;
-  side: 'groom' | 'bride' | 'mutual';
-  receiptAttached?: boolean;
-}
-
-// 2. Vendor Record
-interface Vendor {
-  id: string;
-  name: string;
-  category: ExpenseCategory;
-  contactPerson: string;
-  phone: string;
-  city: string;
-  agreedAmount: number;
-  advancePaid: number;
-  balanceDue: number;
-  dueDate: string;
-  status: 'booked' | 'advance_paid' | 'fully_paid';
-  notes?: string;
-}
-
-// 3. Sacred Shagun & Gift Record
-interface ShagunGift {
-  id: string;
-  donorName: string;
-  relation: string;
-  side: 'groom' | 'bride' | 'mutual';
-  giftType: 'cash' | 'gold_silver' | 'item';
-  cashAmount?: number;
-  itemDescription?: string;
-  eventName: 'roka' | 'engagement' | 'sangeet' | 'haldi' | 'wedding' | 'reception';
-  date: string;
-  returnGiftNotes?: string;
-  thankYouSent: boolean;
-}
-
-// 4. Shopping Item
-interface ShoppingItem {
-  id: string;
-  title: string;
-  category: 'bride' | 'groom' | 'family' | 'pooja_ceremony' | 'return_gifts' | 'other';
-  estimatedPrice: number;
-  actualPrice?: number;
-  status: 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
-  assignedTo: string;
-  storeName?: string;
-  notes?: string;
-  urgency: 'high' | 'medium' | 'low';
-}
-
-// 5. Checklist Task
-interface ChecklistTask {
-  id: string;
-  title: string;
-  phase: '6_months' | '3_months' | '1_month' | 'wedding_week' | 'day_of' | 'post_wedding';
-  category: string;
-  isCompleted: boolean;
-  priority: 'high' | 'medium' | 'low';
-  assignedTo: string;
-  dueDate: string;
-}
+-- 5. Brute-Force Rate Limiting
+CREATE TABLE rate_limits (
+  id TEXT PRIMARY KEY,
+  action_key TEXT NOT NULL,
+  ip_address TEXT NOT NULL,
+  attempt_count INTEGER NOT NULL DEFAULT 1,
+  first_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_attempt_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
----
+### Authentication & RBAC Security Guarantees
 
-## 5. Security & Multi-User Architecture Plan (For Phase 2)
-
-### Invitation-Only Token Boundary
-1. **Host Generation:** The wedding creator (e.g. bride/groom or parents) provisions an encrypted invite link containing an HMAC-SHA256 family token.
-2. **Granular Permissions:**
-   - **Family Admin:** Can edit total budget, approve vendor contracts, delete entries.
-   - **Family Editor:** Can log expenses, check shopping items, record Shagun envelopes.
-   - **Family Viewer:** Read-only access to schedules, checklists, and travel instructions.
-3. **No Insecure Public Signups:** Prevents accidental leakage of wedding finances, vendor negotiation rates, or personal family contact lists to web crawlers.
+1. **Password Protection:** Scrypt hashing via Node's native `crypto.scryptSync` with 16-byte cryptographically secure random salts and constant-time `timingSafeEqual` comparison.
+2. **Replay-Protected Setup:** Primary Owner creation is permitted exactly once via `/api/setup`. Subsequent requests are rejected with HTTP 400.
+3. **Session Independence:** Each device receives an independent UUIDv4 session token stored as a SHA-256 hash. Logging out on Device A invalidates only Device A's session record.
+4. **Invitation Security:** 32-byte cryptographic hex tokens (`crypto.randomBytes(32)`), stored exclusively as SHA-256 hashes. Single-use enforcement inside an atomic transaction, configurable expiration (7, 14, 30 days), and immediate revocation support.
+5. **Role Escalation Protection:** Invitations cannot grant `OWNER` status; only existing Owners can promote members. Demoting or deleting the last active Owner is strictly prohibited.
+6. **Deny-by-Default Authorization:** Endpoints verify valid sessions and enforce minimum required roles (`requireRole('OWNER')`, `requireRole('FAMILY_MEMBER')`).
 
 ---
 
-## 6. Implementation Phasing Roadmap
+## 4. Implementation Phasing Roadmap
 
 | Phase | Title | Status | Scope |
 |---|---|---|---|
-| **Phase 1** | Foundation, Design System & Responsive Shell | **COMPLETED** | Complete PWA foundation, 10 screens, bilingual i18n, honest state management, Vitest test suite. |
-| **Phase 2** | Family Accounts & Cloudflare D1 / SQLite Persistence | Planned | Secure invitation tokens, role-based access, relational database schema, CRUD API. |
-| **Phase 3** | Offline IndexedDB Engine & Sync Conflict Handler | Planned | Background synchronization, optimistic UI updates, conflict resolution with vector clocks. |
-| **Phase 4** | Advanced Financial Reports & PDF / Excel Export | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports. |
-| **Phase 5** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |
-| **Phase 6** | Zero-Lock-In Backup & Portability Engine | Planned | One-click raw JSON / CSV complete wedding archive backup and restore capability. |
+| **Phase 1** | Foundation, Design System & Responsive Shell | **COMPLETED** | PWA foundation, 10 screens, bilingual i18n (EN/HI), luxury palette, Vitest test suite. |
+| **Phase 2** | Secure Authentication, Family Invitations & RBAC | **COMPLETED** | Native Node/SQLite database, multi-device sessions, Scrypt hashing, invite-only onboarding, role enforcement, 23 automated tests. |
+| **Phase 3** | Wedding Budget, Expenses & Vendor Persistence | Planned | Real database CRUD operations for expenses, vendor advances, shopping lists, and Shagun registers. |
+| **Phase 4** | Offline IndexedDB Engine & Sync Conflict Handler | Planned | Background synchronization, optimistic UI updates, conflict resolution with vector clocks. |
+| **Phase 5** | Advanced Financial Reports & PDF / Excel Export | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports. |
+| **Phase 6** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |
+| **Phase 7** | Zero-Lock-In Backup & Portability Engine | Planned | One-click raw JSON / CSV complete wedding archive backup and restore capability. |

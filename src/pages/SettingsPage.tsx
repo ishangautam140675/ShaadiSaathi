@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useWedding } from '../context/WeddingContext';
+import { useAuth } from '../context/useAuth';
 import { LanguageSwitcher } from '../components/common/LanguageSwitcher';
 import { Badge } from '../components/common/Badge';
 import { PhaseNoticeModal } from '../components/common/PhaseNoticeModal';
@@ -18,9 +20,9 @@ import {
 export const SettingsPage: React.FC = () => {
   const { t, language } = useTranslation();
   const { summary } = useWedding();
+  const { user, isAuthenticated } = useAuth();
 
   const [isBackupNoticeOpen, setIsBackupNoticeOpen] = useState(false);
-  const [isRoleNoticeOpen, setIsRoleNoticeOpen] = useState(false);
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-4xl">
@@ -106,7 +108,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. Family Access & Roles (Phase 2 Preview) */}
+      {/* 3. Family Access & Roles (Phase 2 Real RBAC) */}
       <section className="bg-ivory-light rounded-2xl p-5 border border-gold/30 card-shadow space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -122,14 +124,28 @@ export const SettingsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsRoleNoticeOpen(true)}
-            className="text-xs text-burgundy font-bold hover:underline cursor-pointer"
+          <NavLink
+            to="/family"
+            className="px-3 py-1.5 rounded-xl bg-burgundy text-ivory text-xs font-semibold hover:bg-burgundy-dark transition-colors"
           >
-            {t.common.view}
-          </button>
+            {language === 'hi' ? 'परिवार प्रबंधन' : 'Manage Family'}
+          </NavLink>
         </div>
+
+        {isAuthenticated && user && (
+          <div className="p-3.5 rounded-xl bg-ivory border border-gold/30 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-charcoal-muted block text-[11px]">Current Session User:</span>
+              <span className="font-bold text-burgundy text-sm">{user.name}</span>
+            </div>
+            <Badge
+              variant={user.role === 'OWNER' ? 'burgundy' : user.role === 'FAMILY_MEMBER' ? 'gold' : 'outline'}
+              size="sm"
+            >
+              {user.role === 'OWNER' ? t.family.roleOwner : user.role === 'FAMILY_MEMBER' ? t.family.roleMember : t.family.roleViewer}
+            </Badge>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
           <div className="p-3 rounded-xl bg-ivory border border-gold/25 space-y-1">
@@ -143,7 +159,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div className="p-3 rounded-xl bg-ivory border border-gold/25 space-y-1">
-            <Badge variant="gold" size="sm">Editor</Badge>
+            <Badge variant="gold" size="sm">Member</Badge>
             <p className="text-xs font-semibold text-charcoal mt-1">
               {t.settings.editorRole}
             </p>
@@ -261,19 +277,6 @@ export const SettingsPage: React.FC = () => {
           'Export of Shagun blessings register for family memory album',
           'Zero paid cloud storage dependency',
         ]}
-      />
-
-      {/* Role Notice Modal */}
-      <PhaseNoticeModal
-        isOpen={isRoleNoticeOpen}
-        onClose={() => setIsRoleNoticeOpen(false)}
-        featureName="Role-Based Family Access"
-        targetPhase="Phase 2"
-        description={
-          language === 'hi'
-            ? 'पारिवारिक सदस्यों को उनकी जिम्मेदारी के अनुसार भूमिका दी जाएगी (उदा. ताऊ जी वित्तीय व्यवस्थापक, छोटे भाई खरीदारी समन्वयक)।'
-            : 'Granular family roles ensure sensitive finances are restricted to elders while younger cousins can coordinate shopping and tasks without seeing overall bank reconciliations.'
-        }
       />
     </div>
   );
