@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #FFF9F0;
+  --color-ivory-light: #FFFFFF;
+  --color-ivory-dark: #F5EADB;
+  --color-burgundy: #702D3D;
+  --color-burgundy-dark: #4E1E2A;
+  --color-burgundy-light: #8E3B4F;
+  --color-burgundy-soft: #A34E62;
+  --color-gold: #C5A46D;
+  --color-gold-light: #DFCA9E;
+  --color-gold-dark: #9D7E47;
+  --color-sage: #849780;
+  --color-sage-light: #A7B8A4;
+  --color-sage-dark: #5F735B;
+  --color-charcoal: #292725;
+  --color-charcoal-light: #4A4744;
+  --color-charcoal-muted: #736E6A;
+  --color-rose: #EBD9D8;
+  --color-rose-light: #F6EEEE;
+  --color-rose-dark: #D4BCBB;
+
+  --font-serif: "Cinzel", "Playfair Display", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", "Noto Sans Devanagari", system-ui, -apple-system, sans-serif;
+  --font-devanagari: "Noto Sans Devanagari", "Plus Jakarta Sans", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  --bg-primary: #FFF9F0;
+  --text-primary: #292725;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Custom wedding aesthetic utilities */
+.font-royal {
+  font-family: "Cinzel", "Playfair Display", Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #DFCA9E 0%, #C5A46D 50%, #9D7E47 100%);
+}
+
+.burgundy-gradient {
+  background: linear-gradient(135deg, #702D3D 0%, #541F2C 100%);
+}
+
+.card-shadow {
+  box-shadow: 0 4px 20px -2px rgba(112, 45, 61, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+}
+
+.card-shadow-hover {
+  box-shadow: 0 10px 25px -4px rgba(112, 45, 61, 0.12), 0 4px 10px -2px rgba(197, 164, 109, 0.15);
+}
+
+/* Subtle gold border accent */
+.border-gold-accent {
+  border: 1px solid rgba(197, 164, 109, 0.35);
+}
+
+/* Accessible focus outline */
+*:focus-visible {
+  outline: 2px solid #C5A46D;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
