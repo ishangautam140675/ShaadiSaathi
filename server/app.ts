@@ -1,6 +1,8 @@
 import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import multer from 'multer';
+import fs from 'node:fs';
 import { AppDatabase, getDatabase } from './db/database.ts';
 import { AuthService } from './services/authService.ts';
 import { InvitationService } from './services/invitationService.ts';
@@ -12,6 +14,13 @@ import { ShoppingService } from './services/shoppingService.ts';
 import { GiftService } from './services/giftService.ts';
 import { ChecklistService } from './services/checklistService.ts';
 import { SyncService } from './services/syncService.ts';
+import { DocumentService } from './services/documentService.ts';
+import { OcrService } from './services/ocrService.ts';
+import { GeminiService } from './services/geminiService.ts';
+import { ImportService } from './services/importService.ts';
+import { ReportsService } from './services/reportsService.ts';
+import { ExportService } from './services/exportService.ts';
+import { BackupService } from './services/backupService.ts';
 import { createAuthMiddleware, type AuthenticatedRequest } from './middleware/authMiddleware.ts';
 import { requireRoles } from './middleware/rbacMiddleware.ts';
 import { createRateLimitMiddleware, clearRateLimit } from './middleware/rateLimitMiddleware.ts';
@@ -29,6 +38,13 @@ export interface AppContext {
   giftService: GiftService;
   checklistService: ChecklistService;
   syncService: SyncService;
+  documentService: DocumentService;
+  ocrService: OcrService;
+  geminiService: GeminiService;
+  importService: ImportService;
+  reportsService: ReportsService;
+  exportService: ExportService;
+  backupService: BackupService;
 }
 
 export const createServerApp = (customDb?: AppDatabase): AppContext => {
@@ -45,6 +61,38 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const giftService = new GiftService(appDb);
   const checklistService = new ChecklistService(appDb);
   const syncService = new SyncService(appDb);
+  const documentService = new DocumentService(appDb);
+  const ocrService = new OcrService();
+  const geminiService = new GeminiService();
+  const importService = new ImportService(appDb, documentService);
+  const reportsService = new ReportsService(appDb);
+  const exportService = new ExportService(appDb, reportsService);
+  const backupService = new BackupService(appDb);
+
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, documentService.getUploadsDir());
+    },
+    filename: (_req, file, cb) => {
+      const sanitized = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, `${Date.now()}-${sanitized}`);
+    },
+  });
+
+  const upload = multer({
+    storage,
+    limits: {
+      fileSize: 15 * 1024 * 1024, // 15MB limit
+    },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/plain'];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('INVALID_FILE_TYPE: Allowed formats are JPG, PNG, WEBP, and PDF.'));
+      }
+    },
+  });
 
   const authMiddleware = createAuthMiddleware(authService);
   const rateLimitMiddleware = createRateLimitMiddleware(appDb);
@@ -1371,6 +1419,390 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     }
   );
 
+  // -------------------------------------------------------------
+  // 14. SmartScan Document Processing & Reviewable Imports (Phase 6)
+  // -------------------------------------------------------------
+  app.post(
+    '/api/documents/upload',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      upload.single('file')(req as any, res as any, async (err: any) => {
+        if (err) {
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            res.status(400).json({ error: 'FILE_TOO_LARGE', message: 'File exceeds 15MB limit.' });
+            return;
+          }
+          res.status(400).json({ error: 'UPLOAD_FAILED', message: err.message });
+          return;
+        }
+
+        const file = (req as any).file;
+
+        if (req.user!.role !== 'OWNER' && req.user!.role !== 'FAMILY_MEMBER') {
+          if (file && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch {}
+          }
+          res.status(403).json({
+            error: 'FORBIDDEN',
+            message: 'INSUFFICIENT_PERMISSIONS: Viewers cannot upload documents.',
+          });
+          return;
+        }
+
+        if (!file) {
+          res.status(400).json({ error: 'FILE_REQUIRED', message: 'No file uploaded.' });
+          return;
+        }
+
+        try {
+          const doc = documentService.createDocument({
+            familyId: req.user!.family_id,
+            userId: req.user!.id,
+            originalFilename: file.originalname,
+            filePath: file.path,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+          });
+
+          if (req.query.autoOcr === 'true') {
+            try {
+              const ocrResult = await ocrService.processDocument(doc.filePath, doc.mimeType);
+              documentService.updateDocumentOcr(doc.id, {
+                ocrStatus: 'completed',
+                ocrEngine: 'local_tesseract',
+                extractedText: ocrResult.rawText,
+                confidenceScore: ocrResult.confidenceScore,
+                extractedData: ocrResult,
+                proposedCount: ocrResult.lineItems.length,
+              });
+              const updatedDoc = documentService.getDocumentById(req.user!.family_id, doc.id);
+              res.status(201).json({ document: updatedDoc, ocrResult });
+              return;
+            } catch (ocrErr: any) {
+              documentService.updateDocumentOcr(doc.id, {
+                ocrStatus: 'failed',
+                errorSummary: ocrErr.message,
+              });
+            }
+          }
+
+          res.status(201).json({ document: doc });
+        } catch (saveErr: any) {
+          res.status(500).json({ error: 'DOCUMENT_CREATION_FAILED', message: saveErr.message });
+        }
+      });
+    }
+  );
+
+  app.get(
+    '/api/documents',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const docs = documentService.getDocumentsByFamily(req.user!.family_id);
+        res.json({ documents: docs, total: docs.length });
+      } catch (err: any) {
+        res.status(500).json({ error: 'FETCH_DOCUMENTS_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.get(
+    '/api/documents/:id',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const doc = documentService.getDocumentById(req.user!.family_id, req.params.id as string);
+        if (!doc) {
+          res.status(404).json({ error: 'DOCUMENT_NOT_FOUND', message: 'Document not found in this family.' });
+          return;
+        }
+        res.json({ document: doc });
+      } catch (err: any) {
+        res.status(500).json({ error: 'GET_DOCUMENT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.get(
+    '/api/documents/:id/file',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const doc = documentService.getDocumentById(req.user!.family_id, req.params.id as string);
+        if (!doc || !fs.existsSync(doc.filePath)) {
+          res.status(404).json({ error: 'FILE_NOT_FOUND', message: 'File not found on server.' });
+          return;
+        }
+
+        res.setHeader('Content-Type', doc.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${doc.originalFilename}"`);
+        const readStream = fs.createReadStream(doc.filePath);
+        readStream.pipe(res);
+      } catch (err: any) {
+        res.status(500).json({ error: 'STREAM_FILE_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    '/api/documents/:id/ocr',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const doc = documentService.getDocumentById(req.user!.family_id, req.params.id as string);
+        if (!doc) {
+          res.status(404).json({ error: 'DOCUMENT_NOT_FOUND', message: 'Document not found.' });
+          return;
+        }
+
+        documentService.updateDocumentOcr(doc.id, { ocrStatus: 'processing' });
+        const language = (req.body?.language as string) || 'eng';
+        const ocrResult = await ocrService.processDocument(doc.filePath, doc.mimeType, language);
+
+        documentService.updateDocumentOcr(doc.id, {
+          ocrStatus: 'completed',
+          ocrEngine: 'local_tesseract',
+          extractedText: ocrResult.rawText,
+          confidenceScore: ocrResult.confidenceScore,
+          extractedData: ocrResult,
+          proposedCount: ocrResult.lineItems.length,
+        });
+
+        const updatedDoc = documentService.getDocumentById(req.user!.family_id, doc.id);
+        res.json({ document: updatedDoc, result: ocrResult });
+      } catch (err: any) {
+        documentService.updateDocumentOcr(req.params.id as string, {
+          ocrStatus: 'failed',
+          errorSummary: err.message,
+        });
+        res.status(500).json({ error: 'OCR_PROCESSING_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    '/api/documents/:id/enhance',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const doc = documentService.getDocumentById(req.user!.family_id, req.params.id as string);
+        if (!doc) {
+          res.status(404).json({ error: 'DOCUMENT_NOT_FOUND', message: 'Document not found.' });
+          return;
+        }
+
+        const userConsent = Boolean(req.body?.userConsent);
+        if (!userConsent) {
+          res.status(400).json({
+            error: 'CONSENT_REQUIRED',
+            message: 'Explicit user consent is required before processing documents with cloud AI.',
+          });
+          return;
+        }
+
+        if (!geminiService.isAvailable()) {
+          res.status(503).json({
+            error: 'GEMINI_UNAVAILABLE',
+            message: 'Gemini API is not configured on the server. Please use local OCR.',
+          });
+          return;
+        }
+
+        documentService.updateDocumentOcr(doc.id, { ocrStatus: 'processing' });
+        const result = await geminiService.extractWithGemini(doc.filePath, doc.mimeType, {
+          userConsent: true,
+          modelName: req.body?.modelName,
+        });
+
+        documentService.updateDocumentOcr(doc.id, {
+          ocrStatus: 'completed',
+          ocrEngine: 'gemini_flash',
+          extractedText: result.rawText,
+          confidenceScore: result.confidenceScore,
+          extractedData: result,
+          proposedCount: result.lineItems.length,
+        });
+
+        const updatedDoc = documentService.getDocumentById(req.user!.family_id, doc.id);
+        res.json({ document: updatedDoc, result });
+      } catch (err: any) {
+        documentService.updateDocumentOcr(req.params.id as string, {
+          ocrStatus: 'failed',
+          errorSummary: err.message,
+        });
+        res.status(500).json({ error: 'AI_ENHANCE_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    '/api/documents/:id/check-duplicates',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+        const results = importService.checkDuplicates(req.user!.family_id, rows);
+        res.json({ results });
+      } catch (err: any) {
+        res.status(500).json({ error: 'DUPLICATE_CHECK_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    '/api/documents/:id/import',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const doc = documentService.getDocumentById(req.user!.family_id, req.params.id as string);
+        if (!doc) {
+          res.status(404).json({ error: 'DOCUMENT_NOT_FOUND', message: 'Document not found.' });
+          return;
+        }
+
+        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+        if (rows.length === 0) {
+          res.status(400).json({ error: 'EMPTY_IMPORT', message: 'No expense rows provided for import.' });
+          return;
+        }
+
+        const importedExpenses = importService.importConfirmedRows(
+          req.user!.family_id,
+          req.user!.id,
+          req.user!.name,
+          doc.id,
+          rows
+        );
+
+        const updatedDoc = documentService.getDocumentById(req.user!.family_id, doc.id);
+
+        res.status(201).json({
+          message: `Successfully imported ${importedExpenses.length} expense(s).`,
+          count: importedExpenses.length,
+          importedExpenses,
+          document: updatedDoc,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'IMPORT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/documents/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const deleted = documentService.deleteDocument(req.user!.family_id, req.params.id as string);
+        if (!deleted) {
+          res.status(404).json({ error: 'DOCUMENT_NOT_FOUND', message: 'Document not found or already deleted.' });
+          return;
+        }
+        res.json({ message: 'Document successfully deleted.' });
+      } catch (err: any) {
+        res.status(500).json({ error: 'DELETE_DOCUMENT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 15. Financial Reports & Comprehensive Analytics (Phase 6)
+  // -------------------------------------------------------------
+  app.get(
+    '/api/reports/summary',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+        const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+        const report = reportsService.getComprehensiveReport(req.user!.family_id, { startDate, endDate });
+        res.json(report);
+      } catch (err: any) {
+        res.status(500).json({ error: 'GENERATE_REPORT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 16. Safe RFC 4180 CSV & Portable JSON Export (Phase 6)
+  // -------------------------------------------------------------
+  app.get(
+    '/api/export/csv',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const type = (req.query.type as string) || 'expenses';
+        const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+        const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+
+        let csv = '';
+        let filename = `shaadisaathi-${type}-${req.user!.family_id}.csv`;
+
+        if (type === 'vendors') {
+          csv = exportService.exportVendorsCsv(req.user!.family_id);
+          filename = `shaadisaathi-vendors-${req.user!.family_id}.csv`;
+        } else if (type === 'gifts') {
+          csv = exportService.exportGiftsCsv(req.user!.family_id);
+          filename = `shaadisaathi-gifts-shagun-${req.user!.family_id}.csv`;
+        } else {
+          csv = exportService.exportExpensesCsv(req.user!.family_id, { startDate, endDate });
+          filename = `shaadisaathi-expenses-${req.user!.family_id}.csv`;
+        }
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csv);
+      } catch (err: any) {
+        res.status(500).json({ error: 'CSV_EXPORT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.get(
+    '/api/export/json',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const archive = exportService.exportCompleteArchiveJson(req.user!.family_id);
+        const filename = `shaadisaathi-backup-${req.user!.family_id}-${Date.now()}.json`;
+
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.json(archive);
+      } catch (err: any) {
+        res.status(500).json({ error: 'JSON_EXPORT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 17. Backup Archive Validation & Isolated Restoration (Phase 6)
+  // -------------------------------------------------------------
+  app.post(
+    '/api/backup/restore',
+    authMiddleware,
+    requireRoles('OWNER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const archive = req.body?.archive;
+        if (!archive) {
+          res.status(400).json({ error: 'ARCHIVE_REQUIRED', message: 'No backup archive provided in payload.' });
+          return;
+        }
+
+        const result = backupService.restoreArchive(req.user!.family_id, req.user!.id, archive);
+        res.json({ message: 'Backup restored successfully.', result });
+      } catch (err: any) {
+        res.status(400).json({ error: 'BACKUP_RESTORE_FAILED', message: err.message });
+      }
+    }
+  );
+
   return {
     app,
     appDb,
@@ -1384,5 +1816,12 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     giftService,
     checklistService,
     syncService,
+    documentService,
+    ocrService,
+    geminiService,
+    importService,
+    reportsService,
+    exportService,
+    backupService,
   };
 };

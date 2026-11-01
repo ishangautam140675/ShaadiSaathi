@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   paid_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   vendor_name TEXT,
   vendor_id TEXT,
+  source_document_id TEXT REFERENCES scan_documents(id) ON DELETE SET NULL,
   payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'upi', 'card', 'bank_transfer', 'other')),
   payment_status TEXT NOT NULL CHECK (payment_status IN ('paid', 'partially_paid', 'pending')),
   notes TEXT,
@@ -270,3 +271,31 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_idempotency_family ON idempotency_keys(family_id);
+
+-- 14. Scan Documents & SmartScan Ingestion (Phase 6: Functional Document Extraction & Audit)
+CREATE TABLE IF NOT EXISTS scan_documents (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  uploaded_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  original_filename TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  mime_type TEXT NOT NULL,
+  ocr_status TEXT NOT NULL DEFAULT 'pending' CHECK (ocr_status IN ('pending', 'processing', 'completed', 'failed')),
+  ocr_engine TEXT NOT NULL DEFAULT 'local_tesseract' CHECK (ocr_engine IN ('local_tesseract', 'gemini_flash', 'manual')),
+  extracted_text TEXT,
+  confidence_score REAL DEFAULT 0,
+  extracted_data TEXT, -- JSON structure of detected line items, totals, vendor, date
+  import_status TEXT NOT NULL DEFAULT 'unreviewed' CHECK (import_status IN ('unreviewed', 'partially_imported', 'imported', 'discarded')),
+  proposed_count INTEGER NOT NULL DEFAULT 0,
+  accepted_count INTEGER NOT NULL DEFAULT 0,
+  rejected_count INTEGER NOT NULL DEFAULT 0,
+  error_summary TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_documents_family ON scan_documents(family_id);
+CREATE INDEX IF NOT EXISTS idx_scan_documents_status ON scan_documents(family_id, ocr_status);
+CREATE INDEX IF NOT EXISTS idx_scan_documents_import ON scan_documents(family_id, import_status);

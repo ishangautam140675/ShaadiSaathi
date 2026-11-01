@@ -62,9 +62,13 @@ export class AppDatabase {
         if (!expenseColNames.includes('vendor_id')) {
           this.db.exec('ALTER TABLE expenses ADD COLUMN vendor_id TEXT');
         }
+        if (!expenseColNames.includes('source_document_id')) {
+          this.db.exec('ALTER TABLE expenses ADD COLUMN source_document_id TEXT');
+        }
         if (!expenseColNames.includes('version')) {
           this.db.exec('ALTER TABLE expenses ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
         }
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_expenses_source_doc ON expenses(source_document_id)');
       }
 
       // Backward-compatible check for other tables needing 'version'
@@ -87,6 +91,10 @@ export class AppDatabase {
 
   public close(): void {
     this.db.close();
+  }
+
+  public getDb(): DatabaseSync {
+    return this.db;
   }
 }
 

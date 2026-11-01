@@ -219,6 +219,30 @@ npm run build
 - [x] **SmartScan Screen:** 4-step human verification workflow and OCR roadmap notice.
 - [x] **Settings Screen:** Session info, family link, and architecture preferences.
 
+### Suite 12: `server/test/smartscan-reports.test.ts` (16 Backend API & Processing Tests)
+- [x] **Document Upload:** Allows OWNER and FAMILY_MEMBER to upload receipts; blocks VIEWER with 403 Forbidden.
+- [x] **File Validation:** Enforces file type safety, rejecting disallowed extensions and unauthenticated uploads.
+- [x] **Tenant Document Isolation:** Prevents Family B from accessing or reading Family A's uploaded documents.
+- [x] **Local OCR Engine:** Parses simulated vendor, Indian Rupee total, transaction date, and line items.
+- [x] **Discrepancy Detection:** Detects and flags discrepancy when line item sum differs from detected grand total.
+- [x] **Gemini Enhancement Security:** Requires explicit `userConsent: true` for cloud OCR processing.
+- [x] **Cloud Graceful Fallback:** Falls back cleanly to local heuristics when `GEMINI_API_KEY` is absent.
+- [x] **Duplicate Detection:** Accurately flags potential duplicate receipt entries against existing database records.
+- [x] **Batch Import:** Atomically commits human-approved rows into `expenses` linked with `source_document_id`.
+- [x] **Import Audit Trail:** Updates scan document status to `imported` and records accepted row counts.
+- [x] **Financial Reports Aggregation:** Computes budget utilization, committed contracts, cash remaining, and category balances.
+- [x] **Decoupled Shagun Accounting:** Keeps gifts/shagun calculations strictly separated from operational expenses.
+- [x] **Formula Injection Mitigation:** Prefixes dangerous formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) with `'` in CSV exports.
+- [x] **UTF-8 BOM Header:** Prepends `\uFEFF` in CSV outputs for flawless multilingual Excel/Numbers rendering.
+- [x] **Portable JSON Export:** Produces complete, uncompromised JSON backup scrubbed of passwords and session tokens.
+- [x] **Isolated Restoration:** Transactionally replaces family wedding data from valid backup archive and rejects corrupt files.
+
+### Suite 13: `src/test/SmartScanFlow.test.tsx` (4 Frontend UI & Verification Tests)
+- [x] **Dropzone & Upload UI:** Renders drag-and-drop receipt uploader with file and camera trigger options.
+- [x] **Privacy Consent Modal:** Displays Gemini AI disclaimer and privacy notice before cloud processing.
+- [x] **Discrepancy Warning Banner:** Highlights calculation mismatches between extracted items and detected grand total.
+- [x] **Side-by-Side Review & Import:** Allows inline editing of line items, vendor, and amounts before final database import.
+
 ---
 
 ## 4. Security Verification Audit
@@ -231,12 +255,15 @@ npm run build
 | **Role Escalation** | Deny-by-default server middleware (`requireRole`) | PASS &bull; Viewers/Members blocked from owner operations |
 | **Brute-Force Guard** | Sliding window rate limiter (5 attempts / 15 min) | PASS &bull; Tracked per IP and action key in SQLite |
 | **Cross-Family Leakage** | All database queries filtered by authenticated `family_id` | PASS &bull; Foreign key constraint enforcement |
+| **CSV Formula Injection** | Cells starting with `=, +, -, @, \t, \r` prefixed with `'` | PASS &bull; Tested against DDE and formula execution payloads |
+| **Backup Scrubbing** | Passwords, session tokens, and invite secrets excluded | PASS &bull; JSON backup contains zero credentials |
+| **Cloud OCR Consent** | Explicit `userConsent: true` gatekeeper before cloud call | PASS &bull; Receipt images never uploaded without confirmation |
 
 ---
 
 ## 5. Build & Code Quality Summary
 
 - **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit` & `npx tsc -b`)
-- **Oxlint AST Analysis:** 0 errors, 0 warnings (74 files checked)
-- **Vitest Test Suite:** 56 passed (9 test files, 100% passing)
+- **Oxlint AST Analysis:** 0 errors, 0 warnings (93 files checked)
+- **Vitest Test Suite:** 89 passed (13 test files, 100% passing)
 - **PWA Production Build:** Complete bundle generated in `dist/` with valid web manifest and service worker.

@@ -13,6 +13,9 @@ export const requireRoles = (...allowedRoles: UserRole[]) => {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
+      if ((req as any).readable) {
+        req.resume();
+      }
       res.status(403).json({
         error: 'FORBIDDEN',
         message: `INSUFFICIENT_PERMISSIONS: Your role (${req.user.role}) does not have permission to perform this action.`,

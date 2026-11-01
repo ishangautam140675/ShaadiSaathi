@@ -368,5 +368,47 @@ CREATE TABLE idempotency_keys (
 | **Phase 3** | Wedding Budget, Expenses & Real Database Persistence | **COMPLETED** | Real SQLite database CRUD for wedding budget & expenses, integer paise precision, partial payments, search/filter/pagination, audit trail, 43 automated tests. |
 | **Phase 4** | Vendors, Payment Tracking, Shopping, Gifts & Checklist | **COMPLETED** | Complete CRUD for vendors, payment log with expense linking, shopping variance analysis, sacred gifts/shagun decoupled ledger, and wedding checklist, 56 automated tests. |
 | **Phase 5** | Offline-First Experience, Safe Synchronization & PWA | **COMPLETED** | Durable IndexedDB queue, idempotency key caching, revision optimistic concurrency (409 Conflict), side-by-side anti-merge conflict modal, pull sync, PWA Workbox policy, 69 automated tests. |
-| **Phase 6** | Advanced Financial Reports, PDF / Excel Export & Portability | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports, and raw JSON backup. |
-| **Phase 7** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |
+| **Phase 6** | SmartScan Document Extraction, Financial Reports, Export & Backups | **COMPLETED** | Multi-engine receipt scanning (Local Tesseract OCR + optional Gemini Flash with explicit consent), side-by-side verification & discrepancy detection, duplicate checks, comprehensive database-backed analytics, formula-safe RFC 4180 CSV exports, and transactional JSON backup/restore (`ShaadiSaathi-Wedding-Backup-V1`), 89 automated tests. |
+| **Phase 7** | Production Hardening, Multi-Family Tenancy & Final Polish | Planned | Multi-family hosting isolation, performance benchmarking, end-to-end audit readiness, and deployment verification. |
+
+---
+
+## 5. Phase 6 Architecture: SmartScan, Reports, Export & Backups
+
+### 5.1 Document Processing Pipeline (SmartScan)
+1. **Upload & Storage (`documentService.ts`)**:
+   - Receipts and invoices stored under `data/uploads/documents` using sanitized, collision-resistant UUID filenames (`.pdf`, `.jpg`, `.png`, `.webp`).
+   - Tenant isolation enforced: File access (`/api/documents/:id/file`) checks `family_id` ownership on every read.
+2. **Local OCR Engine (`ocrService.ts`)**:
+   - Uses `tesseract.js` for completely local, offline-capable optical character recognition.
+   - Dual-language support (`eng` and `hin+eng`).
+   - Domain-tuned regex heuristics for Indian Rupee amounts, receipt dates, vendor detection, and itemized rows.
+   - Grand Total Discrepancy detector flags math errors when `detectedGrandTotal != sum(itemizedAmounts)`.
+3. **Optional Cloud Enhancement (`geminiService.ts`)**:
+   - Uses `@google/genai` (Gemini 2.5 Flash) strictly as an opt-in enhancement.
+   - **Zero Mandatory Subscription**: Works 100% locally if `GEMINI_API_KEY` is not provided.
+   - **Privacy First**: Explicit user consent (`userConsent: true`) is required per document.
+   - Schema-enforced structured JSON output for vendor, date, line items, and totals.
+4. **Duplicate Detection & Human Verification (`importService.ts`)**:
+   - Potential duplicates checked against existing database expenses before importing.
+   - **Zero Automatic Ingestion**: Expenses are never written to the database until explicitly confirmed by the user.
+   - Traceability: Imported expenses reference `source_document_id`.
+
+### 5.2 Financial Reports Engine (`reportsService.ts`)
+- Computes real-time wedding financial health from authoritative SQLite tables with integer paise precision:
+  - Total Budget, Committed Contracts, Total Paid, Outstanding Dues, Budget Utilization %, Cash Remaining.
+  - Category Breakdown with spend progress bars.
+  - Vendor Payment Balances with contract dues.
+  - Shopping Budget Variance (Estimated vs Actual price).
+  - Decoupled Shagun / Gifts tally (sacred blessings separated from operational wedding budget).
+  - Monthly Spend Timeline.
+
+### 5.3 Safe Data Export (`exportService.ts`)
+- **Formula Injection Mitigation**: Any field starting with dangerous spreadsheet formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) is safely prefixed with a single quote (`'`).
+- **UTF-8 BOM Header**: Prefixes all CSV streams with `\uFEFF` ensuring Excel and Numbers render Devanagari Hindi text cleanly without garbled characters.
+- Strict RFC 4180 quoting and comma escaping.
+
+### 5.4 Backup & Disaster Recovery (`backupService.ts`)
+- **Format**: `ShaadiSaathi-Wedding-Backup-V1` JSON format.
+- **Security**: Strips sensitive credentials (password hashes, active session tokens, invitation secrets) during export.
+- **Isolated Restoration**: Validates schema version and family identity before executing a single atomic SQLite transaction (`BEGIN TRANSACTION` ... `COMMIT`), wiping and repopulating all wedding records safely.

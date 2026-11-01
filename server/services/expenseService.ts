@@ -59,6 +59,7 @@ export interface ExpenseRow {
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
   notes: string | null;
+  source_document_id?: string | null;
   created_by_user_id: string;
   updated_by_user_id: string | null;
   created_at: string;
@@ -83,6 +84,7 @@ export interface ExpenseEntityOutput {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   notes: string | null;
+  sourceDocumentId?: string | null;
   createdByUserId: string;
   updatedByUserId: string | null;
   createdAt: string;
@@ -168,6 +170,7 @@ export class ExpenseService {
       paymentMethod: row.payment_method,
       paymentStatus: row.payment_status,
       notes: row.notes,
+      sourceDocumentId: row.source_document_id || null,
       createdByUserId: row.created_by_user_id,
       updatedByUserId: row.updated_by_user_id,
       createdAt: row.created_at,

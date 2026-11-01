@@ -131,6 +131,28 @@ Built with a dedicated luxury Indian wedding palette:
    - Foreground update banner (`PwaUpdatePrompt`) with one-click reload.
    - Auspicious royal offline fallback screen (`/offline`) with connectivity retry trigger.
 
+### Phase 6: SmartScan Document Extraction, Financial Reports, Export and Backups
+1. **Multi-Engine SmartScan Document Pipeline:**
+   - Upload receipts, bills, and quotes (`.pdf`, `.jpg`, `.png`, `.webp`) up to 15MB.
+   - **Local Tesseract OCR**: Offline-capable, zero-cost OCR supporting both English and Devanagari Hindi (`hin+eng`).
+   - **Optional Gemini 2.5 Flash**: Server-side cloud OCR enhancement via official `@google/genai` SDK. Strictly requires explicit user consent (`userConsent: true`), with zero cloud leakage when disabled or offline.
+   - **Discrepancy Detector**: Automatically flags mathematical mismatches when line item totals differ from the detected receipt grand total.
+   - **Duplicate Detection**: Flags potential duplicate expenses before import based on similar amounts, vendors, and dates.
+   - **Zero Automatic Ingestion**: Extracted items are never saved to the database without explicit human review and approval.
+2. **Authoritative Financial Analytics & Reporting:**
+   - Real-time aggregation of committed budgets, actual payments, outstanding dues, and cash runway.
+   - Visual category spend distribution with progress meters.
+   - Vendor payment contract status and shopping budget variance analysis.
+   - Culturally decoupled Shagun gifts registry summary.
+   - Monthly spend timeline.
+3. **Safe Spreadsheet & Portable JSON Exports:**
+   - **CSV Export with Formula Injection Guard**: Prefixes formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) with `'` to mitigate DDE/formula execution in Excel and Google Sheets.
+   - **UTF-8 BOM Header**: Ensures seamless rendering of Devanagari Hindi characters in spreadsheet applications.
+   - **Portable Master JSON Export**: Full wedding archive export scrubbed of sensitive passwords, session tokens, and invitation hashes.
+4. **Disaster Recovery & Atomic Backup Restoration:**
+   - Validated backup schema (`ShaadiSaathi-Wedding-Backup-V1`).
+   - Atomic SQLite transactional restore (`BEGIN TRANSACTION` ... `COMMIT`) replacing wedding data cleanly without orphaned foreign keys.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -138,12 +160,13 @@ Built with a dedicated luxury Indian wedding palette:
 - **Frontend:** React 19, TypeScript (Strict Mode)
 - **Backend:** Node.js 24, Express 4.x
 - **Database:** Node 24 Native SQLite (`node:sqlite`) / Cloudflare D1 compatible
+- **Document Processing:** Tesseract.js (Local OCR) + `@google/genai` (Optional Cloud Enhancement)
 - **Bundler:** Vite 8
 - **Styling:** Tailwind CSS v4 with custom color variables
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
 - **PWA:** `vite-plugin-pwa` (Workbox)
-- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (69 automated tests across 11 suites, 100% passing)
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (89 automated tests across 13 suites, 100% passing)
 - **Linter:** Oxlint (0 errors, 0 warnings)
 
 ---

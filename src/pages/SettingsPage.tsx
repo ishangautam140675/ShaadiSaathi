@@ -5,7 +5,6 @@ import { useWedding } from '../context/WeddingContext';
 import { useAuth } from '../context/useAuth';
 import { LanguageSwitcher } from '../components/common/LanguageSwitcher';
 import { Badge } from '../components/common/Badge';
-import { PhaseNoticeModal } from '../components/common/PhaseNoticeModal';
 import {
   Languages,
   Heart,
@@ -15,6 +14,9 @@ import {
   Download,
   CheckCircle2,
   HardDrive,
+  UploadCloud,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
@@ -22,7 +24,10 @@ export const SettingsPage: React.FC = () => {
   const { summary } = useWedding();
   const { user, isAuthenticated } = useAuth();
 
-  const [isBackupNoticeOpen, setIsBackupNoticeOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-4xl">
@@ -232,52 +237,165 @@ export const SettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 5. Data Portability & Backup (Phase 6 Preview) */}
+      {/* 5. Data Portability & Master Backups (Phase 6 Active) */}
       <section className="bg-ivory-light rounded-2xl p-5 border border-gold/30 card-shadow space-y-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-xl bg-burgundy/10 text-burgundy mt-0.5">
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-burgundy">
-                {t.settings.backupSection}
-              </h2>
-              <p className="text-xs text-charcoal-muted mt-0.5 max-w-lg">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-burgundy">
+                  {t.settings.backupSection}
+                </h2>
+                <Badge variant="gold" size="sm">Phase 6 Active</Badge>
+              </div>
+              <p className="text-xs text-charcoal-muted mt-0.5 max-w-lg leading-relaxed">
                 {t.settings.backupDesc}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsBackupNoticeOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gold/50 bg-ivory text-burgundy text-xs font-semibold hover:bg-rose/40 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
-          >
-            <Download className="w-4 h-4 text-burgundy" />
-            <span>{t.settings.exportBackupBtn}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Master Backup Download */}
+            <button
+              type="button"
+              onClick={() => window.open('/api/export/json', '_blank')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gold/50 bg-burgundy hover:bg-burgundy-dark text-ivory text-xs font-semibold transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <Download className="w-4 h-4 text-gold-light" />
+              <span>{t.settings.exportBackupBtn}</span>
+            </button>
+
+            {/* Restore Backup Modal Trigger */}
+            {(!user || user?.role === 'OWNER') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRestoreMsg(null);
+                  setIsRestoreModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gold/40 bg-ivory text-burgundy text-xs font-semibold hover:bg-rose/40 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+              >
+                <UploadCloud className="w-4 h-4 text-burgundy" />
+                <span>{t.settings.restoreBackupBtn}</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {restoreMsg && (
+          <div
+            className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-fadeIn ${
+              restoreMsg.type === 'success'
+                ? 'bg-sage/20 border-sage/40 text-sage-dark'
+                : 'bg-burgundy/10 border-burgundy/30 text-burgundy'
+            }`}
+          >
+            {restoreMsg.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-sage flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-burgundy flex-shrink-0" />
+            )}
+            <span>{restoreMsg.text}</span>
+          </div>
+        )}
       </section>
 
-      {/* Backup Roadmap Modal */}
-      <PhaseNoticeModal
-        isOpen={isBackupNoticeOpen}
-        onClose={() => setIsBackupNoticeOpen(false)}
-        featureName="Data Portability Engine"
-        targetPhase="Phase 6"
-        description={
-          language === 'hi'
-            ? 'शादीसाथी डेटा पोर्टेबिलिटी को एक मूल अधिकार मानता है। फेज़ 6 में आप एक क्लिक में पूरा डेटा (खर्च, शगुन बही, बिल, संपर्क) बिना किसी रुकावट के डाउनलोड कर सकेंगे।'
-            : 'ShaadiSaathi treats data portability as an inviolable guarantee. In Phase 6, you will be able to export your complete wedding repository as raw JSON or zipped CSV workbooks with zero vendor lock-in.'
-        }
-        checklistItems={[
-          'One-click JSON master wedding archive download',
-          'Portable schema that can be restored into any SQLite or PostgreSQL database',
-          'Export of Shagun blessings register for family memory album',
-          'Zero paid cloud storage dependency',
-        ]}
-      />
+      {/* Restore Backup Modal */}
+      {isRestoreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-ivory rounded-2xl border border-gold/40 shadow-xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gold/20 pb-3">
+              <h3 className="text-base font-bold font-royal text-burgundy">
+                {t.settings.restoreModalTitle}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsRestoreModalOpen(false)}
+                className="text-charcoal-muted hover:text-charcoal p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-charcoal-muted leading-relaxed">
+              {t.settings.restoreModalDesc}
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!restoreFile) return;
+
+                setIsRestoring(true);
+                setRestoreMsg(null);
+
+                try {
+                  const fileText = await restoreFile.text();
+                  const archive = JSON.parse(fileText);
+
+                  const res = await fetch('/api/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ archive }),
+                  });
+
+                  const data = await res.json();
+                  if (!res.ok) {
+                    throw new Error(data.message || t.settings.restoreError);
+                  }
+
+                  setRestoreMsg({
+                    type: 'success',
+                    text: `${t.settings.restoreSuccess} (Expenses: ${data.result.importedCounts.expenses}, Vendors: ${data.result.importedCounts.vendors}, Gifts: ${data.result.importedCounts.giftsShagun}, Tasks: ${data.result.importedCounts.checklistTasks})`,
+                  });
+                  setIsRestoreModalOpen(false);
+                } catch (err: any) {
+                  setRestoreMsg({
+                    type: 'error',
+                    text: err.message || t.settings.restoreError,
+                  });
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  {t.settings.restoreSelectFile} (.json)
+                </label>
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-charcoal file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border file:border-gold/40 file:bg-ivory file:text-burgundy file:text-xs file:font-semibold hover:file:bg-rose/40 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRestoreModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-gold/30 text-xs font-semibold text-charcoal hover:bg-ivory-light cursor-pointer"
+                >
+                  {t.common.cancel}
+                </button>
+                <button
+                  type="submit"
+                  disabled={!restoreFile || isRestoring}
+                  className="px-4 py-2 rounded-xl bg-burgundy hover:bg-burgundy-dark text-ivory text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {isRestoring ? t.settings.restoring : t.settings.restoreSubmitBtn}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
