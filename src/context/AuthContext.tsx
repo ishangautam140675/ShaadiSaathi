@@ -119,7 +119,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error('Backend server is temporarily unreachable. Please ensure the server is running.');
+        }
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {};
+        }
+      }
       if (!res.ok) {
         setError(data.message || 'Incorrect email or password.');
         setIsLoading(false);
@@ -187,7 +201,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error('Backend server is temporarily unreachable. Please ensure the server is running.');
+        }
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {};
+        }
+      }
       if (!res.ok) {
         setError(data.message || 'Initialization failed.');
         setIsLoading(false);
@@ -229,7 +257,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error('Backend server is temporarily unreachable. Please ensure the server is running.');
+        }
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {};
+        }
+      }
       if (!res.ok) {
         setError(data.message || 'Failed to accept invitation.');
         setIsLoading(false);

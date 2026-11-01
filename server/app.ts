@@ -50,6 +50,7 @@ export interface AppContext {
 
 export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const app = express();
+  app.set('trust proxy', true);
   const appDb = customDb || getDatabase();
 
   const authService = new AuthService(appDb);
@@ -125,10 +126,15 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     if (process.env.NODE_ENV === 'production' && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
       const origin = req.headers.origin;
       const host = req.headers.host;
-      if (origin && host) {
+      const forwardedHost = (req.headers['x-forwarded-host'] as string)?.split(',')[0].trim();
+      if (origin && (host || forwardedHost)) {
         try {
           const originHost = new URL(origin).host;
-          if (originHost !== host && (!Array.isArray(allowedOrigins) || !allowedOrigins.includes(origin))) {
+          const matchesHost = (host && originHost === host) || (forwardedHost && originHost === forwardedHost);
+          const isWhitelisted = Array.isArray(allowedOrigins) && allowedOrigins.includes(origin);
+          const isCloudflareTunnel = originHost.endsWith('.trycloudflare.com') && !!req.headers['cf-ray'];
+
+          if (!matchesHost && !isWhitelisted && !isCloudflareTunnel) {
             res.status(403).json({ error: 'CSRF_BLOCKED', message: 'Cross-origin request blocked.' });
             return;
           }
