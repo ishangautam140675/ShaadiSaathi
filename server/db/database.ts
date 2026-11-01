@@ -50,6 +50,9 @@ export class AppDatabase {
         if (!familyColNames.includes('budget_updated_by_user_id')) {
           this.db.exec('ALTER TABLE families ADD COLUMN budget_updated_by_user_id TEXT');
         }
+        if (!familyColNames.includes('version')) {
+          this.db.exec('ALTER TABLE families ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
+        }
       }
 
       // Backward-compatible migration check for 'expenses' table
@@ -58,6 +61,23 @@ export class AppDatabase {
       if (expenseColNames.length > 0) {
         if (!expenseColNames.includes('vendor_id')) {
           this.db.exec('ALTER TABLE expenses ADD COLUMN vendor_id TEXT');
+        }
+        if (!expenseColNames.includes('version')) {
+          this.db.exec('ALTER TABLE expenses ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
+        }
+      }
+
+      // Backward-compatible check for other tables needing 'version'
+      const versionedTables = ['vendors', 'shopping_items', 'gifts_shagun', 'checklist_tasks'];
+      for (const table of versionedTables) {
+        try {
+          const cols = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+          const colNames = cols.map((c) => c.name);
+          if (colNames.length > 0 && !colNames.includes('version')) {
+            this.db.exec(`ALTER TABLE ${table} ADD COLUMN version INTEGER NOT NULL DEFAULT 1`);
+          }
+        } catch {
+          // Table may not exist yet if fresh DB
         }
       }
     } catch (err) {

@@ -18,6 +18,8 @@ import { ChecklistPage } from './pages/ChecklistPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SmartScanPage } from './pages/SmartScanPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { OfflineFallbackPage } from './pages/OfflineFallbackPage';
+import { PwaUpdatePrompt } from './components/common/PwaUpdatePrompt';
 
 export function App() {
   return (
@@ -25,12 +27,14 @@ export function App() {
       <AuthProvider>
         <WeddingProvider>
           <BrowserRouter>
+            <PwaUpdatePrompt />
             <Routes>
               {/* Public & Entry Routes */}
               <Route path="/welcome" element={<WelcomePage />} />
               <Route path="/sign-in" element={<SignInPage />} />
               <Route path="/setup" element={<SetupPage />} />
               <Route path="/invite/:token" element={<AcceptInvitePage />} />
+              <Route path="/offline" element={<OfflineFallbackPage />} />
 
               {/* Core Application Shell with Persistent Layout */}
               <Route path="/" element={<AppLayout />}>

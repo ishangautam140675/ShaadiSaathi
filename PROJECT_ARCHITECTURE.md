@@ -307,39 +307,55 @@ CREATE TABLE checklist_tasks (
   is_completed INTEGER NOT NULL DEFAULT 0,
   completed_at TEXT,
   notes TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
   created_by_user_id TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- 13. Idempotency Keys (Phase 5)
+CREATE TABLE idempotency_keys (
+  key TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  response_status INTEGER NOT NULL,
+  response_body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
 
-### Financial Precision & Monetary Architecture (Phase 3)
+### Offline-First & Safe Synchronization Architecture (Phase 5)
 
-1. **Integer Paise Storage:** All monetary inputs are immediately converted to integer paise (`1 INR = 100 paise`). SQLite `INTEGER` columns store `amount_paise`, `paid_amount_paise`, and `outstanding_balance_paise`. All additions, subtractions, and aggregations run exclusively on integer paise to completely prevent IEEE 754 floating-point inaccuracies. Formatted rupee outputs (`amount_paise / 100`) are provided only at API presentation boundaries.
-2. **Authoritative Financial Metrics Formulas:**
-   - **Total Budget:** Family's authoritative target budget (`total_budget_paise`).
-   - **Total Committed:** Exact sum of all logged expenditures: `SUM(amount_paise)`.
-   - **Total Paid:** Actual cash settled to vendors/shops: `SUM(paid_amount_paise)`.
-   - **Total Outstanding:** Unsettled obligations: `SUM(amount_paise - paid_amount_paise)`.
-   - **Remaining Budget (Runway):** Available expenditure ceiling: `total_budget_paise - total_committed_paise`.
-   - **Cash Remaining:** Undisbursed liquidity: `total_budget_paise - total_paid_paise`.
-   - **Budget Utilization:** Percentage of budget committed: `(total_committed_paise / total_budget_paise) * 100`.
-3. **Multi-Tenancy & Authorization Isolation:**
-   - Every read, write, update, and delete query requires `family_id` strictly derived from the caller's verified session.
-   - Cross-family access is mathematically rejected; attempts to read or mutate another family's expense returns HTTP 404/403.
-   - `OWNER` and `FAMILY_MEMBER` roles can create, update, and delete expenses; `VIEWER` is strictly read-only.
-   - Audit trail automatically records every mutation with user IDs, timestamps, and JSON diffs.
+1. **Durable IndexedDB Persistence:**
+   - **`sync_queue` Store:** Durable queue for offline mutations (`operationId`, `familyId`, `userId`, `entityType`, `entityId`, `operationType`, `payload`, `baseVersion`, `status`, `retryCount`, `serverRecord`). Keyed by `operationId` with status and creation indexes.
+   - **`cached_records` Store:** Fast local read cache keyed by composite `${familyId}:${entityType}:${id}`.
+   - **`storage_metadata` Store:** Health, quota tracking, and persistent storage grant status.
+   - In non-browser or test runner environments (Vitest/JSDOM), an in-memory queue fallback operates automatically.
 
-### Authentication & RBAC Security Guarantees
+2. **Idempotency & Duplicate Prevention:**
+   - Client generates a unique UUID operation ID (`Idempotency-Key` / `x-idempotency-key`).
+   - Server checks `idempotency_keys` table inside an atomic transaction.
+   - If an operation with the same key was previously processed, the server replays the stored status code and response payload with header `X-Idempotency-Replay: true`, eliminating duplicate records upon network retries or timeouts.
 
-1. **Password Protection:** Scrypt hashing via Node's native `crypto.scryptSync` with 16-byte cryptographically secure random salts and constant-time `timingSafeEqual` comparison.
-2. **Replay-Protected Setup:** Primary Owner creation is permitted exactly once via `/api/setup`. Subsequent requests are rejected with HTTP 400.
-3. **Session Independence:** Each device receives an independent UUIDv4 session token stored as a SHA-256 hash. Logging out on Device A invalidates only Device A's session record.
-4. **Invitation Security:** 32-byte cryptographic hex tokens (`crypto.randomBytes(32)`), stored exclusively as SHA-256 hashes. Single-use enforcement inside an atomic transaction, configurable expiration (7, 14, 30 days), and immediate revocation support.
-5. **Role Escalation Protection:** Invitations cannot grant `OWNER` status; only existing Owners can promote members. Demoting or deleting the last active Owner is strictly prohibited.
-6. **Deny-by-Default Authorization:** Endpoints verify valid sessions and enforce minimum required roles (`requireRole('OWNER')`, `requireRole('FAMILY_MEMBER')`).
+3. **Optimistic Concurrency & Revision Conflict Resolution:**
+   - All mutable tables (`families`, `expenses`, `vendors`, `shopping_items`, `gifts_shagun`, `checklist_tasks`) track a monotonically increasing `version INTEGER NOT NULL DEFAULT 1`.
+   - Mutating requests specify `expectedVersion` or `baseVersion`. If the server record's current revision is greater than `expectedVersion`, the server aborts the mutation and responds with HTTP 409 Conflict along with `serverRecord`.
+   - **Anti-Merge Monetary Guarantee:** Automatic algorithmic merging of monetary amounts, vendor advances, or payments is strictly forbidden. Conflicting edits trigger a side-by-side comparison modal allowing the user to explicitly choose `Accept Server Version` or `Overwrite with My Changes`.
+
+4. **Multi-Device Pull Synchronization:**
+   - Endpoints `/api/sync/changes?since=<ISO_TIMESTAMP>` provide differential change sets across all entities, enabling family members on phones and laptops to remain synchronized in real time.
+   - Batch endpoint `/api/sync/batch` processes queued offline operations sequentially in an atomic transaction, validating authorizations and checking concurrency versions.
+
+5. **Safe PWA Workbox Caching Policy:**
+   - **Static Assets:** Versioned JS bundles, CSS stylesheets, web fonts, and application icons use `StaleWhileRevalidate` and `CacheFirst` strategies.
+   - **Security Restriction:** Private financial data and authentication API responses (`/api/*`) are **strictly prohibited** from Service Worker `CacheStorage` to protect private multi-generational family finances.
+   - **PWA Update Notification:** Foreground banner (`PwaUpdatePrompt`) alerts users when a new service worker release is ready and provides an instant one-click reload.
+   - **Offline Shell & Fallback:** Royal offline fallback page (`/offline`) with an auspicious Kalash crest and retry connectivity trigger.
 
 ---
 
@@ -351,6 +367,6 @@ CREATE TABLE checklist_tasks (
 | **Phase 2** | Secure Authentication, Family Invitations & RBAC | **COMPLETED** | Native Node/SQLite database, multi-device sessions, Scrypt hashing, invite-only onboarding, role enforcement, 23 automated tests. |
 | **Phase 3** | Wedding Budget, Expenses & Real Database Persistence | **COMPLETED** | Real SQLite database CRUD for wedding budget & expenses, integer paise precision, partial payments, search/filter/pagination, audit trail, 43 automated tests. |
 | **Phase 4** | Vendors, Payment Tracking, Shopping, Gifts & Checklist | **COMPLETED** | Complete CRUD for vendors, payment log with expense linking, shopping variance analysis, sacred gifts/shagun decoupled ledger, and wedding checklist, 56 automated tests. |
-| **Phase 5** | Advanced Financial Reports, PDF / Excel Export & Offline Sync | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports, and background sync. |
-| **Phase 6** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |
-| **Phase 7** | Zero-Lock-In Backup & Portability Engine | Planned | One-click raw JSON / CSV complete wedding archive backup and restore capability. |
+| **Phase 5** | Offline-First Experience, Safe Synchronization & PWA | **COMPLETED** | Durable IndexedDB queue, idempotency key caching, revision optimistic concurrency (409 Conflict), side-by-side anti-merge conflict modal, pull sync, PWA Workbox policy, 69 automated tests. |
+| **Phase 6** | Advanced Financial Reports, PDF / Excel Export & Portability | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports, and raw JSON backup. |
+| **Phase 7** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |

@@ -110,6 +110,27 @@ Built with a dedicated luxury Indian wedding palette:
    - Strict `family_id` tenant isolation across all Phase 4 tables.
    - VIEWER role enforces read-only guards on both frontend and server.
 
+### Phase 5: Offline-First Experience, Safe Synchronization & PWA
+1. **Durable IndexedDB Queue & Fallback Engine:**
+   - Local structured records stored in IndexedDB stores (`sync_queue`, `cached_records`, `storage_metadata`).
+   - Automatically supports in-memory queue fallback for headless test runners (Vitest/JSDOM).
+   - Zero silent discard: unsaved drafts remain persistently stored until the server confirms persistence.
+2. **Idempotency & Duplicate Prevention:**
+   - `Idempotency-Key` tracking on all financial mutations (`POST /api/expenses`, `/api/vendors/:id/payments`).
+   - Database table `idempotency_keys` ensures retried network requests replay the authoritative response without duplicate records.
+3. **Optimistic Concurrency & Revision Conflict Resolution:**
+   - Monotonic `version` tracking across all entities (`families`, `expenses`, `vendors`, `shopping_items`, `gifts_shagun`, `checklist_tasks`).
+   - Rejects stale concurrent updates with HTTP 409 Conflict.
+   - **Anti-Merge Monetary Guarantee**: Automatic algorithmic merging of financial records is strictly forbidden. Users review side-by-side local draft vs server record with explicit `Accept Server Version` or `Overwrite with My Changes` decisions.
+4. **Multi-Device Differential Pull Sync:**
+   - Periodic and event-driven pull sync (`/api/sync/changes?since=...`) keeps family members on mobile phones and laptops aligned.
+   - Sequential batch sync (`/api/sync/batch`) processes offline queues atomically.
+5. **Safe PWA Workbox Policy & App Shell:**
+   - Static asset precaching and runtime caching (`dist/sw.js` and `workbox-*.js`).
+   - Private financial data and auth sessions strictly excluded from Service Worker `CacheStorage`.
+   - Foreground update banner (`PwaUpdatePrompt`) with one-click reload.
+   - Auspicious royal offline fallback screen (`/offline`) with connectivity retry trigger.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -121,8 +142,8 @@ Built with a dedicated luxury Indian wedding palette:
 - **Styling:** Tailwind CSS v4 with custom color variables
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
-- **PWA:** `vite-plugin-pwa`
-- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (56 automated tests across 9 suites)
+- **PWA:** `vite-plugin-pwa` (Workbox)
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (69 automated tests across 11 suites, 100% passing)
 - **Linter:** Oxlint (0 errors, 0 warnings)
 
 ---

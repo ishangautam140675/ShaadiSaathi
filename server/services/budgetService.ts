@@ -4,6 +4,7 @@ export interface BudgetInfo {
   totalBudget: number;
   totalBudgetPaise: number;
   currency: string;
+  version?: number;
   updatedAt: string;
   budgetUpdatedByUserId: string | null;
 }
@@ -17,7 +18,7 @@ export class BudgetService {
 
   getBudget(familyId: string): BudgetInfo {
     const stmt = this.appDb.db.prepare(`
-      SELECT total_budget, total_budget_paise, currency, updated_at, budget_updated_by_user_id
+      SELECT total_budget, total_budget_paise, currency, version, updated_at, budget_updated_by_user_id
       FROM families
       WHERE id = ?
     `);
@@ -26,6 +27,7 @@ export class BudgetService {
       total_budget: number;
       total_budget_paise: number;
       currency: string;
+      version?: number;
       updated_at: string;
       budget_updated_by_user_id: string | null;
     } | undefined;
@@ -42,6 +44,7 @@ export class BudgetService {
       totalBudget: totalBudgetPaise / 100,
       totalBudgetPaise,
       currency: row.currency || 'INR',
+      version: row.version ?? 1,
       updatedAt: row.updated_at,
       budgetUpdatedByUserId: row.budget_updated_by_user_id,
     };
@@ -67,6 +70,7 @@ export class BudgetService {
       SET total_budget = ?,
           total_budget_paise = ?,
           budget_updated_by_user_id = ?,
+          version = version + 1,
           updated_at = ?
       WHERE id = ?
     `);

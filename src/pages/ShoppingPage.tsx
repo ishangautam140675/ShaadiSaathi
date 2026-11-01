@@ -21,6 +21,7 @@ import {
   Edit2,
   Trash2,
   Lock,
+  Clock,
 } from 'lucide-react';
 
 export const ShoppingPage: React.FC = () => {
@@ -283,8 +284,14 @@ export const ShoppingPage: React.FC = () => {
                     </Badge>
                   </div>
 
-                  <h3 className="text-base font-bold text-burgundy font-royal">
-                    {title}
+                  <h3 className="text-base font-bold text-burgundy font-royal flex items-center gap-1.5 flex-wrap">
+                    <span>{title}</span>
+                    {item.isOfflineDraft && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                        <Clock className="w-2.5 h-2.5" />
+                        {language === 'hi' ? 'स्थानीय ड्राफ्ट' : 'Offline Draft'}
+                      </span>
+                    )}
                   </h3>
 
                   {item.quantity && item.quantity > 1 && (

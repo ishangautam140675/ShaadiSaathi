@@ -17,6 +17,7 @@ import {
   Edit2,
   Trash2,
   Lock,
+  Clock,
 } from 'lucide-react';
 
 export const ChecklistPage: React.FC = () => {
@@ -229,13 +230,19 @@ export const ChecklistPage: React.FC = () => {
 
                   <div className="flex-1 min-w-0">
                     <span
-                      className={`text-sm font-semibold block truncate ${
+                      className={`text-sm font-semibold flex items-center gap-1.5 flex-wrap truncate ${
                         isCompleted
                           ? 'line-through text-charcoal-muted'
                           : 'text-charcoal'
                       }`}
                     >
-                      {task.title}
+                      <span>{task.title}</span>
+                      {task.isOfflineDraft && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 not-italic no-underline">
+                          <Clock className="w-2.5 h-2.5" />
+                          {language === 'hi' ? 'स्थानीय ड्राफ्ट' : 'Offline Draft'}
+                        </span>
+                      )}
                     </span>
 
                     <div className="flex items-center gap-3 text-[11px] text-charcoal-muted mt-1 flex-wrap">

@@ -47,6 +47,8 @@ export interface Expense {
   notes?: string | null;
   side?: 'groom' | 'bride' | 'mutual';
   receiptAttached?: boolean;
+  version?: number;
+  isOfflineDraft?: boolean;
 }
 
 export interface ExpenseEntity {
@@ -70,6 +72,8 @@ export interface ExpenseEntity {
   side?: 'groom' | 'bride' | 'mutual' | string;
   createdByUserId: string;
   updatedByUserId?: string | null;
+  version?: number;
+  isOfflineDraft?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,6 +100,7 @@ export interface VendorPayment {
 
 export interface Vendor {
   id: string;
+  familyId?: string;
   name: string;
   category: ExpenseCategory;
   contactPerson: string;
@@ -116,6 +121,8 @@ export interface Vendor {
   notes?: string;
   payments?: VendorPayment[];
   createdByUserId?: string;
+  version?: number;
+  isOfflineDraft?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -134,6 +141,7 @@ export interface VendorSummaryData {
 
 export interface ShoppingStatusItem {
   id: string;
+  familyId?: string;
   title: string;
   name?: string; // alias
   category: string;
@@ -151,6 +159,8 @@ export interface ShoppingStatusItem {
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   deadline?: string;
   isOverdue?: boolean;
+  version?: number;
+  isOfflineDraft?: boolean;
 }
 
 export type ShoppingStatus = 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled' | 'planned';
@@ -172,6 +182,7 @@ export interface ShoppingSummaryData {
 
 export interface ShagunGift {
   id: string;
+  familyId?: string;
   donorName: string;
   giverName?: string; // alias
   relation: string;
@@ -189,6 +200,8 @@ export interface ShagunGift {
   returnGiftNotes?: string;
   thankYouSent?: boolean;
   notes?: string;
+  version?: number;
+  isOfflineDraft?: boolean;
 }
 
 export type GiftEntity = ShagunGift;
@@ -212,6 +225,7 @@ export type ChecklistPhase =
 
 export interface ChecklistTask {
   id: string;
+  familyId?: string;
   title: string;
   phase: ChecklistPhase;
   category: string;
@@ -222,6 +236,8 @@ export interface ChecklistTask {
   dueDate: string;
   notes?: string;
   completedAt?: string;
+  version?: number;
+  isOfflineDraft?: boolean;
 }
 
 export type ChecklistTaskEntity = ChecklistTask;

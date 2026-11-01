@@ -11,6 +11,7 @@ import { VendorService } from './services/vendorService.ts';
 import { ShoppingService } from './services/shoppingService.ts';
 import { GiftService } from './services/giftService.ts';
 import { ChecklistService } from './services/checklistService.ts';
+import { SyncService } from './services/syncService.ts';
 import { createAuthMiddleware, type AuthenticatedRequest } from './middleware/authMiddleware.ts';
 import { requireRoles } from './middleware/rbacMiddleware.ts';
 import { createRateLimitMiddleware, clearRateLimit } from './middleware/rateLimitMiddleware.ts';
@@ -27,6 +28,7 @@ export interface AppContext {
   shoppingService: ShoppingService;
   giftService: GiftService;
   checklistService: ChecklistService;
+  syncService: SyncService;
 }
 
 export const createServerApp = (customDb?: AppDatabase): AppContext => {
@@ -42,6 +44,7 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const shoppingService = new ShoppingService(appDb);
   const giftService = new GiftService(appDb);
   const checklistService = new ChecklistService(appDb);
+  const syncService = new SyncService(appDb);
 
   const authMiddleware = createAuthMiddleware(authService);
   const rateLimitMiddleware = createRateLimitMiddleware(appDb);
@@ -452,6 +455,15 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     requireRoles('OWNER', 'FAMILY_MEMBER'),
     (req: AuthenticatedRequest, res: Response) => {
       try {
+        const idempotencyKey = (req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.operationId) as string | undefined;
+        if (idempotencyKey) {
+          const cached = syncService.getIdempotencyResult(idempotencyKey, req.user!.family_id);
+          if (cached) {
+            res.status(cached.status).json(cached.body);
+            return;
+          }
+        }
+
         const {
           title,
           amount,
@@ -483,10 +495,16 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
           notes,
         });
 
-        res.status(201).json({
+        const responsePayload = {
           message: 'Expense successfully recorded.',
           expense,
-        });
+        };
+
+        if (idempotencyKey) {
+          syncService.saveIdempotencyResult(idempotencyKey, req.user!.family_id, req.user!.id, '/api/expenses', 201, responsePayload);
+        }
+
+        res.status(201).json(responsePayload);
       } catch (err: any) {
         res.status(400).json({ error: 'EXPENSE_CREATION_FAILED', message: err.message });
       }
@@ -499,6 +517,24 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     requireRoles('OWNER', 'FAMILY_MEMBER'),
     (req: AuthenticatedRequest, res: Response) => {
       try {
+        const expectedVersion = req.body.expectedVersion ?? req.body.baseVersion;
+        if (expectedVersion !== undefined) {
+          const current = appDb.db.prepare('SELECT version FROM expenses WHERE id = ? AND family_id = ?').get(req.params.id as string, req.user!.family_id) as { version: number } | undefined;
+          if (current && current.version !== expectedVersion) {
+            const fullServer = expenseService.getExpenseById(req.user!.family_id, req.params.id as string);
+            res.status(409).json({
+              error: 'CONFLICT_DETECTED',
+              message: 'Concurrent edit detected. The expense was updated by another family member.',
+              serverRecord: fullServer,
+              currentVersion: current.version,
+            });
+            return;
+          }
+        }
+
+        // Increment version on successful update
+        appDb.db.prepare('UPDATE expenses SET version = version + 1 WHERE id = ? AND family_id = ?').run(req.params.id as string, req.user!.family_id);
+
         const {
           title,
           amount,
@@ -753,6 +789,15 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     requireRoles('OWNER', 'FAMILY_MEMBER'),
     (req: AuthenticatedRequest, res: Response) => {
       try {
+        const idempotencyKey = (req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.operationId) as string | undefined;
+        if (idempotencyKey) {
+          const cached = syncService.getIdempotencyResult(idempotencyKey, req.user!.family_id);
+          if (cached) {
+            res.status(cached.status).json(cached.body);
+            return;
+          }
+        }
+
         const { amount, paymentDate, paymentMethod, transactionReference, notes, recordInExpenses, allowOverpayment } = req.body;
         const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
 
@@ -766,10 +811,16 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
           allowOverpayment: Boolean(allowOverpayment),
         });
 
-        res.status(201).json({
+        const responsePayload = {
           message: 'Payment successfully logged for vendor.',
           payment,
-        });
+        };
+
+        if (idempotencyKey) {
+          syncService.saveIdempotencyResult(idempotencyKey, req.user!.family_id, req.user!.id, `/api/vendors/${req.params.id}/payments`, 201, responsePayload);
+        }
+
+        res.status(201).json(responsePayload);
       } catch (err: any) {
         if (err.message.includes('VENDOR_NOT_FOUND')) {
           res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: err.message });
@@ -1267,6 +1318,59 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     }
   );
 
+  // -------------------------------------------------------------
+  // 12. Health & Connectivity Verification (Phase 5)
+  // -------------------------------------------------------------
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'ShaadiSaathi Core API',
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 13. Distributed Synchronization & Concurrency Engine (Phase 5)
+  // -------------------------------------------------------------
+  app.get(
+    '/api/sync/changes',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const since = typeof req.query.since === 'string' ? req.query.since : undefined;
+        const changes = syncService.pullChanges(req.user!.family_id, since);
+        res.json(changes);
+      } catch (err: any) {
+        res.status(500).json({ error: 'PULL_CHANGES_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    '/api/sync/batch',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const operations = Array.isArray(req.body.operations) ? req.body.operations : [];
+        const results = syncService.processBatch(
+          req.user!.family_id,
+          req.user!.id,
+          req.user!.role,
+          operations
+        );
+
+        res.json({
+          processedAt: new Date().toISOString(),
+          familyId: req.user!.family_id,
+          total: operations.length,
+          results,
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: 'BATCH_SYNC_FAILED', message: err.message });
+      }
+    }
+  );
+
   return {
     app,
     appDb,
@@ -1279,5 +1383,6 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     shoppingService,
     giftService,
     checklistService,
+    syncService,
   };
 };

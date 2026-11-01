@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LanguageSwitcher } from '../common/LanguageSwitcher';
+import { SyncIndicator } from '../common/SyncIndicator';
+import { SyncStatusDrawer } from '../modals/SyncStatusDrawer';
 import { useTranslation } from '../../context/LanguageContext';
 import { useWedding } from '../../context/WeddingContext';
 import { useAuth } from '../../context/useAuth';
@@ -19,6 +21,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenMobileMenu }) => {
   const navigate = useNavigate();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isSyncDrawerOpen, setIsSyncDrawerOpen] = useState(false);
 
   const isViewer = user?.role === 'VIEWER';
   const brideDisplay = family?.bride_name || summary.brideName;
@@ -80,6 +83,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenMobileMenu }) => {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Sync & Connectivity Indicator */}
+            <SyncIndicator onOpenDetails={() => setIsSyncDrawerOpen(true)} />
+
             {/* Language Switcher */}
             <LanguageSwitcher />
 
@@ -143,6 +149,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenMobileMenu }) => {
       <AddExpenseModal
         isOpen={isExpenseModalOpen}
         onClose={() => setIsExpenseModalOpen(false)}
+      />
+
+      {/* Sync Status & Offline Queue Drawer */}
+      <SyncStatusDrawer
+        isOpen={isSyncDrawerOpen}
+        onClose={() => setIsSyncDrawerOpen(false)}
       />
     </>
   );

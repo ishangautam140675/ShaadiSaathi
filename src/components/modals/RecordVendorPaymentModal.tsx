@@ -258,3 +258,4 @@ export const RecordVendorPaymentModal: React.FC<RecordVendorPaymentModalProps> =
     </Modal>
   );
 };
+

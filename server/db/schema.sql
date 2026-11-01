@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS families (
   total_budget_paise INTEGER NOT NULL DEFAULT 250000000,
   currency TEXT NOT NULL DEFAULT 'INR',
   budget_updated_by_user_id TEXT REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -98,11 +99,13 @@ CREATE TABLE IF NOT EXISTS expenses (
   paid_by_name TEXT NOT NULL,
   paid_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   vendor_name TEXT,
+  vendor_id TEXT,
   payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'upi', 'card', 'bank_transfer', 'other')),
   payment_status TEXT NOT NULL CHECK (payment_status IN ('paid', 'partially_paid', 'pending')),
   notes TEXT,
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
   updated_by_user_id TEXT REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -151,6 +154,7 @@ CREATE TABLE IF NOT EXISTS vendors (
   notes TEXT,
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
   updated_by_user_id TEXT REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -199,6 +203,7 @@ CREATE TABLE IF NOT EXISTS shopping_items (
   notes TEXT,
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
   updated_by_user_id TEXT REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -221,6 +226,7 @@ CREATE TABLE IF NOT EXISTS gifts_shagun (
   side TEXT NOT NULL DEFAULT 'mutual' CHECK (side IN ('bride', 'groom', 'mutual')),
   notes TEXT,
   recorded_by_user_id TEXT NOT NULL REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -243,6 +249,7 @@ CREATE TABLE IF NOT EXISTS checklist_tasks (
   notes TEXT,
   completed_at TEXT,
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -250,3 +257,16 @@ CREATE TABLE IF NOT EXISTS checklist_tasks (
 CREATE INDEX IF NOT EXISTS idx_checklist_family ON checklist_tasks(family_id);
 CREATE INDEX IF NOT EXISTS idx_checklist_family_phase ON checklist_tasks(family_id, phase);
 CREATE INDEX IF NOT EXISTS idx_checklist_family_status ON checklist_tasks(family_id, status);
+
+-- 13. Idempotency Keys (Phase 5: Duplicate Operation Prevention & Safe Sync)
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  key TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  response_status INTEGER NOT NULL,
+  response_body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_family ON idempotency_keys(family_id);

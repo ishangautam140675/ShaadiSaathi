@@ -17,6 +17,7 @@ import {
   Trash2,
   ArrowUpDown,
   Lock,
+  Clock,
 } from 'lucide-react';
 
 export const ExpensesPage: React.FC = () => {
@@ -284,7 +285,15 @@ export const ExpensesPage: React.FC = () => {
                   return (
                     <tr key={exp.id} className="hover:bg-rose-light/40 transition-colors">
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-burgundy">{exp.title}</div>
+                        <div className="font-semibold text-burgundy flex items-center gap-1.5">
+                          <span>{exp.title}</span>
+                          {exp.isOfflineDraft && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                              <Clock className="w-2.5 h-2.5" />
+                              {language === 'hi' ? 'स्थानीय ड्राफ्ट' : 'Offline Draft'}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-charcoal-muted flex items-center gap-2 mt-0.5">
                           {vendor && <span>To: {vendor}</span>}
                           {exp.notes && <span className="truncate max-w-[200px] text-charcoal-muted/80">({exp.notes})</span>}
@@ -386,8 +395,14 @@ export const ExpensesPage: React.FC = () => {
                       <span className="text-xs uppercase tracking-wider text-charcoal-muted font-bold block mb-0.5">
                         {t.categories[exp.category as ExpenseCategory] || exp.category}
                       </span>
-                      <h3 className="text-sm font-bold text-burgundy leading-snug">
-                        {exp.title}
+                      <h3 className="text-sm font-bold text-burgundy leading-snug flex items-center gap-1.5 flex-wrap">
+                        <span>{exp.title}</span>
+                        {exp.isOfflineDraft && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                            <Clock className="w-2.5 h-2.5" />
+                            {language === 'hi' ? 'स्थानीय ड्राफ्ट' : 'Offline Draft'}
+                          </span>
+                        )}
                       </h3>
                       {vendor && (
                         <span className="text-[11px] text-charcoal-muted block mt-0.5">
