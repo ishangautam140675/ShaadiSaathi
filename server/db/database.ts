@@ -20,7 +20,7 @@ export class AppDatabase {
     if (options.inMemory) {
       this.db = new DatabaseSync(':memory:');
     } else {
-      const dbFile = options.dbPath || path.resolve(process.cwd(), 'data', 'shaadisaathi.db');
+      const dbFile = options.dbPath || process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'shaadisaathi.db');
       const dir = path.dirname(dbFile);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

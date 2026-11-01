@@ -153,12 +153,24 @@ Built with a dedicated luxury Indian wedding palette:
    - Validated backup schema (`ShaadiSaathi-Wedding-Backup-V1`).
    - Atomic SQLite transactional restore (`BEGIN TRANSACTION` ... `COMMIT`) replacing wedding data cleanly without orphaned foreign keys.
 
+### Phase 7: Final Validation & Production Deployment
+1. **Unified Production Server (`npm start`):**
+   - Express serves the compiled Vite PWA frontend from `dist/` with immutable asset caching and SPA routing fallback.
+2. **Hardened Production Security:**
+   - Automated HTTP defensive headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(self)`, `HSTS`).
+   - Strict CSRF origin verification for state-changing requests in production.
+   - Configurable CORS via `ALLOWED_ORIGINS`.
+3. **Containerization & Zero-Cost Cloud Deployment:**
+   - Lightweight `Dockerfile` based on `node:24-alpine` with non-root security.
+   - `docker-compose.yml` pre-configured with persistent volume `/data`.
+   - Complete guides for Oracle Cloud Always Free VM, Cloudflare Tunnel, and local home hosting.
+
 ---
 
 ## 🛠️ Technology Stack
 
 - **Frontend:** React 19, TypeScript (Strict Mode)
-- **Backend:** Node.js 24, Express 4.x
+- **Backend:** Node.js 24, Express 4.x / 5.x
 - **Database:** Node 24 Native SQLite (`node:sqlite`) / Cloudflare D1 compatible
 - **Document Processing:** Tesseract.js (Local OCR) + `@google/genai` (Optional Cloud Enhancement)
 - **Bundler:** Vite 8
@@ -166,8 +178,8 @@ Built with a dedicated luxury Indian wedding palette:
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
 - **PWA:** `vite-plugin-pwa` (Workbox)
-- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (89 automated tests across 13 suites, 100% passing)
-- **Linter:** Oxlint (0 errors, 0 warnings)
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (104 automated tests across 14 suites, 100% passing)
+- **Linter:** Oxlint (0 errors, 0 warnings across 93 files)
 
 ---
 
@@ -188,26 +200,29 @@ npm run dev
 ```
 Open `http://localhost:5173` in your browser. The Vite development server automatically mounts the Express API middleware under `/api`.
 
-### 3. Run Standalone API Server
+### 3. Build & Run in Production
 ```bash
-npm run server
+# 1. Compile frontend PWA bundle
+npm run build
+
+# 2. Start production server (serves API & SPA on port 3001)
+npm start
 ```
 
-### 4. Run Automated Tests
+### 4. Run with Docker Compose
 ```bash
-npm run test
+docker-compose up -d --build
 ```
 
-### 5. Run Linter
+### 5. Run Automated Tests
+```bash
+npm test
+```
+
+### 6. Run AST Linter
 ```bash
 npm run lint
 ```
-
-### 6. Build for Production
-```bash
-npm run build
-```
-Production assets are generated in `dist/` with service worker bundles (`dist/sw.js`) and manifest files.
 
 ---
 
@@ -215,11 +230,18 @@ Production assets are generated in `dist/` with service worker bundles (`dist/sw
 
 ShaadiSaathi is architected to run on permanent, verified free tiers without automatic paid upgrades:
 
-- **Frontend Hosting:** Cloudflare Pages (Unlimited bandwidth, global CDN, free SSL).
-- **Backend API & Database:** Cloudflare Workers (100,000 free requests/day) + Cloudflare D1 (5,000,000 free row reads/day, 5 GB storage) or lightweight Node VPS/container.
-- **Data Portability:** Standard SQLite schema allows migrating all wedding records to any server or downloading a complete JSON/CSV archive anytime.
+- **Recommended Host:** Oracle Cloud Always Free VM (24GB RAM, 200GB persistent block storage, zero spindown) or Self-Hosting with Cloudflare Tunnel (`cloudflared`).
+- **Data Portability:** Native SQLite format allows effortless offline migration, hot file backups, and in-app master JSON archives (`ShaadiSaathi-Wedding-Backup-V1`).
+- **Zero Mandatory Paid APIs:** Local Tesseract OCR runs on-device; optional Gemini Flash stays within Google AI Studio's 1,500 daily free requests.
 
-See [FREE_DEPLOYMENT_PLAN.md](file:///d:/ShadiAPP/FREE_DEPLOYMENT_PLAN.md) and [PROJECT_ARCHITECTURE.md](file:///d:/ShadiAPP/PROJECT_ARCHITECTURE.md) for full architectural documentation.
+### Comprehensive Operational Guides:
+- [DEPLOYMENT_GUIDE.md](file:///d:/ShadiAPP/DEPLOYMENT_GUIDE.md) — Step-by-step production deployment & SSL setup.
+- [PRODUCTION_ENVIRONMENT.md](file:///d:/ShadiAPP/PRODUCTION_ENVIRONMENT.md) — Environment variables, compute requirements, and reverse proxy configs.
+- [SECURITY_CHECKLIST.md](file:///d:/ShadiAPP/SECURITY_CHECKLIST.md) — Threat mitigation matrix, RBAC rules, CSRF and formula injection protections.
+- [BACKUP_AND_RESTORE.md](file:///d:/ShadiAPP/BACKUP_AND_RESTORE.md) — Automated server backups, manual JSON export, and disaster recovery runbook.
+- [FINAL_TEST_REPORT.md](file:///d:/ShadiAPP/FINAL_TEST_REPORT.md) — Complete 104-test QA report across all 7 development phases.
+- [FREE_HOSTING_LIMITS.md](file:///d:/ShadiAPP/FREE_HOSTING_LIMITS.md) — Transparent breakdown of free hosting limits, spindown times, and storage warnings.
+- [PROJECT_ARCHITECTURE.md](file:///d:/ShadiAPP/PROJECT_ARCHITECTURE.md) — Full technical architecture and system design specification.
 
 ---
 

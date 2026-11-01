@@ -1,0 +1,12 @@
+node_modules
+dist
+data
+*.db*
+.git
+.vscode
+.idea
+*.log
+coverage
+.vitest
+.env
+.env.local

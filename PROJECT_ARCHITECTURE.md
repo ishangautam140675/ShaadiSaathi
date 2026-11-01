@@ -369,7 +369,7 @@ CREATE TABLE idempotency_keys (
 | **Phase 4** | Vendors, Payment Tracking, Shopping, Gifts & Checklist | **COMPLETED** | Complete CRUD for vendors, payment log with expense linking, shopping variance analysis, sacred gifts/shagun decoupled ledger, and wedding checklist, 56 automated tests. |
 | **Phase 5** | Offline-First Experience, Safe Synchronization & PWA | **COMPLETED** | Durable IndexedDB queue, idempotency key caching, revision optimistic concurrency (409 Conflict), side-by-side anti-merge conflict modal, pull sync, PWA Workbox policy, 69 automated tests. |
 | **Phase 6** | SmartScan Document Extraction, Financial Reports, Export & Backups | **COMPLETED** | Multi-engine receipt scanning (Local Tesseract OCR + optional Gemini Flash with explicit consent), side-by-side verification & discrepancy detection, duplicate checks, comprehensive database-backed analytics, formula-safe RFC 4180 CSV exports, and transactional JSON backup/restore (`ShaadiSaathi-Wedding-Backup-V1`), 89 automated tests. |
-| **Phase 7** | Production Hardening, Multi-Family Tenancy & Final Polish | Planned | Multi-family hosting isolation, performance benchmarking, end-to-end audit readiness, and deployment verification. |
+| **Phase 7** | Final Validation, Production Deployment & Hardening | **COMPLETED** | Production Express static asset serving & SPA client-side routing, defensive security headers (CSP, HSTS, X-Content-Type-Options, Permissions-Policy), configurable CORS/CSRF origin verification, Dockerfile containerization, 104 automated tests across 14 test suites (100% passing). |
 
 ---
 
@@ -412,3 +412,29 @@ CREATE TABLE idempotency_keys (
 - **Format**: `ShaadiSaathi-Wedding-Backup-V1` JSON format.
 - **Security**: Strips sensitive credentials (password hashes, active session tokens, invitation secrets) during export.
 - **Isolated Restoration**: Validates schema version and family identity before executing a single atomic SQLite transaction (`BEGIN TRANSACTION` ... `COMMIT`), wiping and repopulating all wedding records safely.
+
+---
+
+## 6. Phase 7 Architecture: Final Validation & Production Deployment
+
+### 6.1 Production Static Serving & SPA Fallback
+- Standalone Node runtime (`npm start` &bull; `tsx server/index.ts`) detects when running outside Vite dev server.
+- Express serves compiled production assets from `dist/` with immutable 1-year caching for fingerprinted assets (`.js`, `.css`) and `no-cache, must-revalidate` for `index.html`.
+- Implements SPA client-side fallback route sending `dist/index.html` for all non-API GET requests.
+
+### 6.2 Defensive Production Security Headers
+- Automatically applies HTTP security headers:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: SAMEORIGIN`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: camera=(self), microphone=(), geolocation=()`
+  - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (when `NODE_ENV=production`)
+
+### 6.3 CORS & CSRF Origin Protection
+- Supports configurable origin enforcement via `ALLOWED_ORIGINS` environment variable.
+- In production, mutating requests (`POST`, `PUT`, `DELETE`, `PATCH`) with mismatched `Origin` headers are blocked with HTTP 403 Forbidden (`CSRF_BLOCKED`).
+
+### 6.4 Containerization & Zero-Cost Cloud Deployment
+- Multi-stage Docker build targeting `node:24-alpine`.
+- Non-root runtime user (`node:node`), healthcheck pinging `/api/setup/status`, and persistent volume mount `/data`.
+- Compatible with Oracle Cloud Always Free VM, Cloudflare Tunnel, Render (with volume), and local home servers.

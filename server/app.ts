@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import fs from 'node:fs';
+import path from 'node:path';
 import { AppDatabase, getDatabase } from './db/database.ts';
 import { AuthService } from './services/authService.ts';
 import { InvitationService } from './services/invitationService.ts';
@@ -97,10 +98,48 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const authMiddleware = createAuthMiddleware(authService);
   const rateLimitMiddleware = createRateLimitMiddleware(appDb);
 
+  // Production Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+
+  // CORS configuration
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : true;
+
   app.use(cors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
   }));
+
+  // CSRF Origin verification for state-changing requests in production
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'production' && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      const origin = req.headers.origin;
+      const host = req.headers.host;
+      if (origin && host) {
+        try {
+          const originHost = new URL(origin).host;
+          if (originHost !== host && (!Array.isArray(allowedOrigins) || !allowedOrigins.includes(origin))) {
+            res.status(403).json({ error: 'CSRF_BLOCKED', message: 'Cross-origin request blocked.' });
+            return;
+          }
+        } catch {
+          res.status(403).json({ error: 'CSRF_BLOCKED', message: 'Invalid origin header.' });
+          return;
+        }
+      }
+    }
+    next();
+  });
   app.use(cookieParser());
   app.use(express.json());
 
@@ -228,7 +267,7 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     if (token) {
       authService.signOut(token);
     }
-    res.clearCookie('shaadisaathi_session');
+    res.clearCookie('shaadisaathi_session', { path: '/' });
     res.json({ message: 'Signed out successfully.' });
   });
 
@@ -1802,6 +1841,32 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
       }
     }
   );
+
+  // -------------------------------------------------------------
+  // 18. Production Static File Serving & SPA Fallback (Phase 7)
+  // -------------------------------------------------------------
+  const distDir = path.resolve(process.cwd(), 'dist');
+  if (fs.existsSync(distDir) && (process.env.NODE_ENV === 'production' || process.env.SERVE_STATIC === 'true')) {
+    app.use(express.static(distDir, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.match(/\.[a-f0-9]{8}\./) || filePath.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
+
+    // SPA fallback: send index.html for non-API GET requests
+    app.use((req: Request, res: Response, next) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api')) {
+        return next();
+      }
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.sendFile(path.join(distDir, 'index.html'));
+    });
+  }
 
   return {
     app,

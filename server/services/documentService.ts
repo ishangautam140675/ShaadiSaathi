@@ -32,7 +32,7 @@ export class DocumentService {
 
   constructor(appDb?: AppDatabase) {
     this.appDb = appDb || getDatabase();
-    this.uploadsDir = path.resolve(process.cwd(), 'data', 'uploads', 'documents');
+    this.uploadsDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'data', 'uploads', 'documents');
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
     }
