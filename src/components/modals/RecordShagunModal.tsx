@@ -1,286 +1,324 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { useTranslation } from '../../context/LanguageContext';
 import { useWedding } from '../../context/WeddingContext';
-import { AlertCircle, CheckCircle2, HeartHandshake } from 'lucide-react';
+import type { ShagunGift, GiftEntity } from '../../types';
+import { IndianRupee, AlertCircle, CheckCircle2, HeartHandshake } from 'lucide-react';
 
 interface RecordShagunModalProps {
   isOpen: boolean;
   onClose: () => void;
+  giftToEdit?: ShagunGift | GiftEntity | null;
 }
 
-export const RecordShagunModal: React.FC<RecordShagunModalProps> = ({ isOpen, onClose }) => {
+export const RecordShagunModal: React.FC<RecordShagunModalProps> = ({
+  isOpen,
+  onClose,
+  giftToEdit,
+}) => {
   const { t, language } = useTranslation();
-  const { addShagunGift } = useWedding();
+  const { addShagunGift, updateShagunGift } = useWedding();
+  const isEditing = Boolean(giftToEdit);
 
-  const [donorName, setDonorName] = useState('');
+  const [giverName, setGiverName] = useState('');
   const [relation, setRelation] = useState('');
   const [side, setSide] = useState<'bride' | 'groom' | 'mutual'>('bride');
-  const [giftType, setGiftType] = useState<'cash' | 'gold_silver' | 'item'>('cash');
-  const [cashAmount, setCashAmount] = useState('');
-  const [itemDescription, setItemDescription] = useState('');
-  const [eventName, setEventName] = useState<'roka' | 'engagement' | 'sangeet' | 'haldi' | 'wedding' | 'reception'>('wedding');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [returnGiftNotes, setReturnGiftNotes] = useState('');
-  const [thankYouSent, setThankYouSent] = useState(false);
+  const [giftType, setGiftType] = useState<'cash' | 'shagun' | 'physical_gift' | 'jewellery' | 'other'>('cash');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [recipient, setRecipient] = useState('couple');
+  const [dateReceived, setDateReceived] = useState(() => new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (giftToEdit) {
+      setGiverName(giftToEdit.giverName || giftToEdit.donorName || '');
+      setRelation(giftToEdit.relation || '');
+      setSide((giftToEdit.side as any) || 'bride');
+      setGiftType((giftToEdit.giftType as any) || 'cash');
+      setAmount(giftToEdit.cashAmount ? String(giftToEdit.cashAmount) : (giftToEdit.amount ? String(giftToEdit.amount) : ''));
+      setDescription(giftToEdit.description || giftToEdit.itemDescription || '');
+      setRecipient(giftToEdit.recipient || 'couple');
+      setDateReceived(giftToEdit.dateReceived || giftToEdit.date || new Date().toISOString().split('T')[0]);
+      setNotes(giftToEdit.notes || giftToEdit.returnGiftNotes || '');
+    } else {
+      setGiverName('');
+      setRelation('');
+      setSide('bride');
+      setGiftType('cash');
+      setAmount('');
+      setDescription('');
+      setRecipient('couple');
+      setDateReceived(new Date().toISOString().split('T')[0]);
+      setNotes('');
+    }
+    setError(null);
+    setSuccess(null);
+  }, [giftToEdit, isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
 
-    if (!donorName.trim()) {
-      setError(language === 'hi' ? 'आशीर्वादकर्ता का नाम आवश्यक है' : 'Donor name is required');
+    if (!giverName.trim()) {
+      setError(language === 'hi' ? 'आशीर्वादकर्ता / परिवार का नाम आवश्यक है।' : 'Giver / Family name is required.');
       return;
     }
 
-    let parsedCash: number | undefined = undefined;
-    if (giftType === 'cash') {
-      parsedCash = parseFloat(cashAmount);
-      if (isNaN(parsedCash) || parsedCash <= 0) {
-        setError(language === 'hi' ? 'वैध शगुन राशि (उदा. ₹5100) दर्ज करें' : 'Enter a valid Shagun cash amount');
-        return;
+    const isMonetary = giftType === 'cash' || giftType === 'shagun';
+    const parsedAmount = amount ? parseFloat(amount) : 0;
+
+    if (isMonetary && (isNaN(parsedAmount) || parsedAmount <= 0)) {
+      setError(language === 'hi' ? 'कृपया मान्य शगुन राशि दर्ज करें (उदा. ₹5100)।' : 'Please enter a valid cash shagun amount (e.g. 5100).');
+      return;
+    }
+
+    if (!isMonetary && !description.trim()) {
+      setError(language === 'hi' ? 'उपहार या आभूषण का विवरण आवश्यक है।' : 'Gift description is required for non-cash gifts.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const payload = {
+        giverName: giverName.trim(),
+        donorName: giverName.trim(),
+        relation: relation.trim() || 'Relative / Friend',
+        side,
+        giftType,
+        amount: isMonetary ? parsedAmount : undefined,
+        cashAmount: isMonetary ? parsedAmount : undefined,
+        description: description.trim() || undefined,
+        itemDescription: description.trim() || undefined,
+        recipient: recipient.trim() || 'couple',
+        dateReceived,
+        date: dateReceived,
+        notes: notes.trim() || undefined,
+      };
+
+      if (isEditing && giftToEdit) {
+        await updateShagunGift(giftToEdit.id, payload);
+        setSuccess(language === 'hi' ? 'उपहार विवरण अद्यतन हो गया।' : 'Gift record updated successfully.');
+      } else {
+        await addShagunGift(payload);
+        setSuccess(language === 'hi' ? 'शगुन बही में सफलतापूर्वक दर्ज हो गया।' : 'Recorded to sacred Shagun ledger.');
       }
-    } else if (!itemDescription.trim()) {
-      setError(language === 'hi' ? 'उपहार या आभूषण का विवरण दर्ज करें' : 'Item description is required');
-      return;
+
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Operation failed.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    addShagunGift({
-      donorName: donorName.trim(),
-      relation: relation.trim() || 'Family / Friend',
-      side,
-      giftType,
-      cashAmount: parsedCash,
-      itemDescription: itemDescription.trim() || undefined,
-      eventName,
-      date,
-      returnGiftNotes: returnGiftNotes.trim() || undefined,
-      thankYouSent,
-    });
-
-    setSuccess(t.expenses.validationSuccess);
-    setTimeout(() => {
-      setSuccess(null);
-      setDonorName('');
-      setCashAmount('');
-      setItemDescription('');
-      onClose();
-    }, 1200);
   };
+
+  const isCash = giftType === 'cash' || giftType === 'shagun';
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t.gifts.modalTitle}
-      subtitle={t.gifts.subtitle}
+      title={isEditing ? (language === 'hi' ? 'शगुन / उपहार विवरण संपादित करें' : 'Edit Shagun Record') : t.gifts.modalTitle}
+      subtitle={language === 'hi' ? 'पारंपरिक लिफ़ाफ़ा एवं उपहारों का बही खाता।' : 'Sacred ledger for cash envelopes (लिफ़ाफ़ा) and blessings.'}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Cultural Sanctity Notice */}
-        <div className="p-3 rounded-xl bg-rose-light border border-gold/40 text-charcoal text-xs flex items-start gap-2.5">
-          <HeartHandshake className="w-4 h-4 text-burgundy flex-shrink-0 mt-0.5" />
-          <span className="leading-relaxed">
-            {t.gifts.noticeBox}
-          </span>
-        </div>
-
         {error && (
-          <div role="alert" className="p-3 rounded-xl bg-burgundy/10 border border-burgundy/30 text-burgundy text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-burgundy/10 border border-burgundy/30 text-burgundy text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div role="status" className="p-3 rounded-xl bg-sage/20 border border-sage/40 text-sage-dark text-xs flex items-center gap-2 font-medium">
+          <div className="p-3 rounded-xl bg-sage/20 border border-sage/40 text-sage-dark text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>{success}</span>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Sacred Cultural Separation Note */}
+        <div className="p-3 rounded-xl bg-gold/15 border border-gold/40 flex items-start gap-2 text-xs text-charcoal">
+          <HeartHandshake className="w-4 h-4 text-burgundy flex-shrink-0 mt-0.5" />
+          <span>
+            {language === 'hi'
+              ? 'शगुन एवं उपहार शादी के सामान्य खर्चों या बजट से बिल्कुल अलग रखे जाते हैं।'
+              : 'Shagun and gifts are kept strictly separated from operating expenses and budgets.'}
+          </span>
+        </div>
+
+        {/* Giver Name & Relation */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="shagun-donor-name" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.donorName} *
+            <label htmlFor="shagun-giver-input" className="block text-xs font-semibold text-charcoal mb-1">
+              {language === 'hi' ? 'आशीर्वाद दाता का नाम *' : 'Blessing Giver / Family Name *'}
             </label>
             <input
-              id="shagun-donor-name"
+              id="shagun-giver-input"
               type="text"
               required
-              value={donorName}
-              onChange={(e) => setDonorName(e.target.value)}
-              placeholder="e.g. Ramesh & Sunita Verma (Tau Ji)"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              value={giverName}
+              onChange={(e) => setGiverName(e.target.value)}
+              placeholder="e.g. Tau Ji, Uncle Vinod, Sharma Family"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
             />
           </div>
 
           <div>
-            <label htmlFor="shagun-relation" className="block text-xs font-semibold text-charcoal mb-1">
+            <label className="block text-xs font-semibold text-charcoal mb-1">
               {t.gifts.relation}
             </label>
             <input
-              id="shagun-relation"
               type="text"
               value={relation}
               onChange={(e) => setRelation(e.target.value)}
-              placeholder="e.g. Maternal Uncle / Jaipur"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              placeholder="e.g. Paternal Uncle, College Friend, Colleague"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Gift Type & Side */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="shagun-gift-type" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.type}
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {t.gifts.giftType} *
             </label>
             <select
-              id="shagun-gift-type"
               value={giftType}
               onChange={(e) => setGiftType(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy capitalize"
             >
-              <option value="cash">Cash Envelope (नकद लिफ़ाफ़ा)</option>
-              <option value="gold_silver">Gold / Silver (स्वर्ण / रजत)</option>
-              <option value="item">Physical Item (उपहार / भेंट)</option>
+              <option value="cash">{t.gifts.cashShagun}</option>
+              <option value="physical_gift">{language === 'hi' ? 'भौतिक उपहार (Physical Gift)' : 'Physical Gift'}</option>
+              <option value="jewellery">{t.gifts.goldSilver}</option>
+              <option value="other">{language === 'hi' ? 'अन्य आशीर्वाद' : 'Other'}</option>
             </select>
           </div>
 
           <div>
-            <label htmlFor="shagun-side" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.side}
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {t.gifts.familySide} *
             </label>
             <select
-              id="shagun-side"
               value={side}
               onChange={(e) => setSide(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy capitalize"
             >
-              <option value="bride">{t.common.brideSide}</option>
-              <option value="groom">{t.common.groomSide}</option>
-              <option value="mutual">{t.common.mutual}</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="shagun-event" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.event}
-            </label>
-            <select
-              id="shagun-event"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy capitalize"
-            >
-              <option value="roka">Roka Ceremony</option>
-              <option value="engagement">Engagement</option>
-              <option value="sangeet">Sangeet & Mehendi</option>
-              <option value="haldi">Haldi</option>
-              <option value="wedding">Wedding Day (शादी)</option>
-              <option value="reception">Reception</option>
+              <option value="bride">{t.gifts.brideSide}</option>
+              <option value="groom">{t.gifts.groomSide}</option>
+              <option value="mutual">{t.gifts.mutualGuests}</option>
             </select>
           </div>
         </div>
 
-        {giftType === 'cash' ? (
+        {/* Cash Amount (If monetary) */}
+        {isCash ? (
           <div>
-            <label htmlFor="shagun-cash-amount" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.amountOrDesc} (₹ Cash Shagun) *
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {t.gifts.cashAmount} (₹) *
             </label>
             <div className="relative">
-              <span className="absolute left-3.5 top-2.5 text-gold-dark font-bold text-sm">₹</span>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <IndianRupee className="w-3.5 h-3.5 text-gold-dark" />
+              </div>
               <input
-                id="shagun-cash-amount"
                 type="number"
+                step="1"
                 min="1"
-                step="any"
                 required
-                value={cashAmount}
-                onChange={(e) => setCashAmount(e.target.value)}
-                placeholder="e.g. 5100 or 11000 or 21000"
-                className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy font-medium"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 5100 or 11000"
+                className="w-full pl-8 pr-3.5 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm font-semibold focus:border-burgundy"
               />
             </div>
-            <p className="text-[11px] text-charcoal-muted mt-1">
-              {language === 'hi' ? 'पारंपरिक शुभ शगुन: ₹501, ₹1100, ₹2100, ₹5100, ₹11000, ₹21000, ₹51000' : 'Auspicious figures: ₹501, ₹1100, ₹2100, ₹5100, ₹11000, ₹21000, ₹51000'}
-            </p>
           </div>
         ) : (
           <div>
-            <label htmlFor="shagun-item-desc" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.gifts.amountOrDesc} (Description) *
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {t.gifts.giftDesc} *
             </label>
             <input
-              id="shagun-item-desc"
               type="text"
               required
-              value={itemDescription}
-              onChange={(e) => setItemDescription(e.target.value)}
-              placeholder="e.g. 10g 24K Gold Coin with Lakshmi imprint / Silver Bowl Set"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Silver Thali Set, Gold Coin 10g, Microwave"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
             />
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Date Received & Recipient */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="shagun-return-notes" className="block text-xs font-semibold text-charcoal mb-1">
-              Return Gift / Hamper Given
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {language === 'hi' ? 'प्राप्ति तिथि *' : 'Date Received *'}
             </label>
             <input
-              id="shagun-return-notes"
-              type="text"
-              value={returnGiftNotes}
-              onChange={(e) => setReturnGiftNotes(e.target.value)}
-              placeholder="e.g. Silver coin & dry fruits box"
-              className="w-full px-3.5 py-2 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="shagun-date" className="block text-xs font-semibold text-charcoal mb-1">
-              {t.common.date}
-            </label>
-            <input
-              id="shagun-date"
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-gold/40 bg-ivory-light text-charcoal text-sm focus:border-burgundy"
+              required
+              value={dateReceived}
+              onChange={(e) => setDateReceived(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-charcoal mb-1">
+              {language === 'hi' ? 'उपहार प्राप्तकर्ता' : 'Gift Recipient'}
+            </label>
+            <input
+              type="text"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder="e.g. Couple, Bride, Groom"
+              className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
             />
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            type="checkbox"
-            id="shagun-thankyou"
-            checked={thankYouSent}
-            onChange={(e) => setThankYouSent(e.target.checked)}
-            className="w-4 h-4 rounded text-burgundy border-gold/50 focus:ring-burgundy"
-          />
-          <label htmlFor="shagun-thankyou" className="text-xs text-charcoal font-medium cursor-pointer">
-            {language === 'hi' ? 'धन्यवाद संदेश / पावती भेजी जा चुकी है' : 'Thank-you message / acknowledgment sent'}
+        {/* Notes */}
+        <div>
+          <label className="block text-xs font-semibold text-charcoal mb-1">
+            {t.gifts.returnGift}
           </label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. Return gift given: Silver coin box, thanked on phone"
+            className="w-full px-3 py-2 rounded-xl border border-gold/40 bg-ivory text-charcoal text-xs sm:text-sm focus:border-burgundy"
+          />
         </div>
 
-        <div className="pt-2 flex items-center justify-end gap-3">
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-3 border-t border-gold/20">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-gold/40 text-charcoal text-xs font-semibold hover:bg-rose/30 transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl border border-gold/40 text-charcoal text-xs sm:text-sm font-semibold hover:bg-rose/30 cursor-pointer"
           >
-            {t.common.cancel}
+            {t.expenses.cancelBtn}
           </button>
           <button
             type="submit"
-            className="px-5 py-2 rounded-xl bg-burgundy hover:bg-burgundy-dark text-ivory text-xs font-semibold transition-all shadow-sm cursor-pointer"
+            disabled={isSubmitting}
+            className="px-5 py-2 rounded-xl bg-burgundy hover:bg-burgundy-dark text-ivory text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
           >
-            {t.common.save}
+            {isSubmitting
+              ? (language === 'hi' ? 'सहेज रहे हैं...' : 'Saving...')
+              : isEditing
+              ? (language === 'hi' ? 'विवरण अद्यतन करें' : 'Save Changes')
+              : (language === 'hi' ? 'बही में दर्ज करें' : 'Record in Ledger')}
           </button>
         </div>
       </form>

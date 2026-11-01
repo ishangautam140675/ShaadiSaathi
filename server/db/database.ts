@@ -51,6 +51,15 @@ export class AppDatabase {
           this.db.exec('ALTER TABLE families ADD COLUMN budget_updated_by_user_id TEXT');
         }
       }
+
+      // Backward-compatible migration check for 'expenses' table
+      const expenseCols = this.db.prepare('PRAGMA table_info(expenses)').all() as Array<{ name: string }>;
+      const expenseColNames = expenseCols.map((c) => c.name);
+      if (expenseColNames.length > 0) {
+        if (!expenseColNames.includes('vendor_id')) {
+          this.db.exec('ALTER TABLE expenses ADD COLUMN vendor_id TEXT');
+        }
+      }
     } catch (err) {
       console.warn('[Database Migration Notice]', err);
     }

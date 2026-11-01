@@ -133,3 +133,4 @@ export const EditBudgetModal: React.FC<EditBudgetModalProps> = ({
     </Modal>
   );
 };
+

@@ -80,21 +80,19 @@ export interface BudgetItem {
   spentAmount: number;
 }
 
-export interface ShoppingStatusItem {
+export interface VendorPayment {
   id: string;
-  title: string;
-  category: 'bride' | 'groom' | 'family' | 'pooja_ceremony' | 'return_gifts' | 'other';
-  estimatedPrice: number;
-  actualPrice?: number;
-  status: 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
-  assignedTo: string;
-  storeName?: string;
+  vendorId: string;
+  amount: number;
+  amountPaise: number;
+  paymentDate: string;
+  paymentMethod: PaymentMethod;
+  transactionReference?: string;
   notes?: string;
-  urgency: 'high' | 'medium' | 'low';
+  linkedExpenseId?: string;
+  recordedByUserId: string;
+  createdAt: string;
 }
-
-export type ShoppingStatus = 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
-export type ShoppingItem = ShoppingStatusItem;
 
 export interface Vendor {
   id: string;
@@ -102,27 +100,106 @@ export interface Vendor {
   category: ExpenseCategory;
   contactPerson: string;
   phone: string;
+  email?: string;
   city: string;
+  address?: string;
   agreedAmount: number;
+  agreedAmountPaise?: number;
   advancePaid: number;
+  paidAmount?: number;
+  paidAmountPaise?: number;
   balanceDue: number;
+  balanceDuePaise?: number;
   dueDate: string;
-  status: 'booked' | 'advance_paid' | 'fully_paid';
+  status: 'booked' | 'advance_paid' | 'fully_paid' | 'in_negotiation' | 'cancelled';
+  eventName?: string;
   notes?: string;
+  payments?: VendorPayment[];
+  createdByUserId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type VendorEntity = Vendor;
+
+export interface VendorSummaryData {
+  totalContracted: number;
+  totalContractedPaise: number;
+  totalPaid: number;
+  totalPaidPaise: number;
+  totalBalanceDue: number;
+  totalBalanceDuePaise: number;
+  vendorCount: number;
+}
+
+export interface ShoppingStatusItem {
+  id: string;
+  title: string;
+  name?: string; // alias
+  category: string;
+  description?: string;
+  estimatedPrice: number;
+  estimatedPricePaise?: number;
+  actualPrice?: number;
+  actualPricePaise?: number;
+  quantity?: number;
+  status: 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled' | 'planned';
+  assignedTo: string;
+  storeName?: string;
+  notes?: string;
+  urgency?: 'high' | 'medium' | 'low' | 'urgent';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  deadline?: string;
+  isOverdue?: boolean;
+}
+
+export type ShoppingStatus = 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled' | 'planned';
+export type ShoppingItem = ShoppingStatusItem;
+export type ShoppingItemEntity = ShoppingItem;
+
+export interface ShoppingSummaryData {
+  estimatedTotal: number;
+  estimatedTotalPaise: number;
+  actualSpent: number;
+  actualSpentPaise: number;
+  variance: number;
+  variancePaise: number;
+  totalItems: number;
+  purchasedItems: number;
+  pendingItems: number;
+  overdueItems: number;
 }
 
 export interface ShagunGift {
   id: string;
   donorName: string;
+  giverName?: string; // alias
   relation: string;
   side: 'groom' | 'bride' | 'mutual';
-  giftType: 'cash' | 'gold_silver' | 'item';
+  giftType: 'cash' | 'gold_silver' | 'item' | 'shagun' | 'physical_gift' | 'jewellery' | 'other';
   cashAmount?: number;
+  amount?: number; // alias
+  amountPaise?: number;
   itemDescription?: string;
-  eventName: 'roka' | 'engagement' | 'sangeet' | 'haldi' | 'wedding' | 'reception';
-  date: string;
+  description?: string; // alias
+  eventName?: string;
+  date?: string;
+  dateReceived?: string; // alias
+  recipient?: string;
   returnGiftNotes?: string;
-  thankYouSent: boolean;
+  thankYouSent?: boolean;
+  notes?: string;
+}
+
+export type GiftEntity = ShagunGift;
+
+export interface GiftsSummaryData {
+  totalCashShagun: number;
+  totalCashShagunPaise: number;
+  cashEnvelopesCount: number;
+  physicalGiftsCount: number;
+  jewelleryGiftsCount: number;
+  totalGiftsCount: number;
 }
 
 export type ChecklistPhase =
@@ -139,9 +216,21 @@ export interface ChecklistTask {
   phase: ChecklistPhase;
   category: string;
   isCompleted: boolean;
-  priority: 'high' | 'medium' | 'low';
+  status?: 'pending' | 'completed';
+  priority: 'high' | 'medium' | 'low' | 'urgent';
   assignedTo: string;
   dueDate: string;
+  notes?: string;
+  completedAt?: string;
+}
+
+export type ChecklistTaskEntity = ChecklistTask;
+
+export interface ChecklistSummaryData {
+  totalTasks: number;
+  completedTasks: number;
+  pendingTasks: number;
+  completionPercentage: number;
 }
 
 export interface WeddingSummary {

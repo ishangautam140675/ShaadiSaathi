@@ -122,6 +122,101 @@ if (!global.fetch || typeof global.fetch !== 'function' || vi.isMockFunction(glo
         }),
       });
     }
+    if (urlStr.includes('/api/vendors/summary')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          totalContracted: 0,
+          totalContractedPaise: 0,
+          totalPaid: 0,
+          totalPaidPaise: 0,
+          totalBalanceDue: 0,
+          totalBalanceDuePaise: 0,
+          vendorCount: 0,
+        }),
+      });
+    }
+    if (urlStr.includes('/api/vendors')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          vendors: [],
+        }),
+      });
+    }
+    if (urlStr.includes('/api/shopping/summary')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          estimatedTotal: 0,
+          estimatedTotalPaise: 0,
+          actualSpent: 0,
+          actualSpentPaise: 0,
+          variance: 0,
+          variancePaise: 0,
+          totalItems: 0,
+          purchasedItems: 0,
+          pendingItems: 0,
+          overdueItems: 0,
+        }),
+      });
+    }
+    if (urlStr.includes('/api/shopping')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [],
+        }),
+      });
+    }
+    if (urlStr.includes('/api/gifts/summary')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          totalCashShagun: 0,
+          totalCashShagunPaise: 0,
+          cashEnvelopesCount: 0,
+          physicalGiftsCount: 0,
+          jewelleryGiftsCount: 0,
+          totalGiftsCount: 0,
+        }),
+      });
+    }
+    if (urlStr.includes('/api/gifts')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          gifts: [],
+        }),
+      });
+    }
+    if (urlStr.includes('/api/checklist/summary')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          totalTasks: 0,
+          completedTasks: 0,
+          pendingTasks: 0,
+          completionPercentage: 0,
+        }),
+      });
+    }
+    if (urlStr.includes('/api/checklist')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          tasks: [],
+        }),
+      });
+    }
     return Promise.resolve({
       ok: true,
       status: 200,

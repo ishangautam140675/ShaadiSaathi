@@ -1,14 +1,21 @@
 import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { useWedding } from './useWedding';
 import { useAuth } from './useAuth';
 import type {
   Expense,
   ExpenseEntity,
   BudgetItem,
   ShoppingItem,
+  ShoppingItemEntity,
+  ShoppingSummaryData,
   Vendor,
+  VendorEntity,
+  VendorSummaryData,
   ShagunGift,
+  GiftEntity,
+  GiftsSummaryData,
   ChecklistTask,
+  ChecklistTaskEntity,
+  ChecklistSummaryData,
   WeddingSummary,
   FinancialSummaryData,
 } from '../types';
@@ -33,27 +40,53 @@ export interface WeddingContextType {
   financialSummary: FinancialSummaryData | null;
   budgetCategories: BudgetItem[];
   expenses: (Expense | ExpenseEntity)[];
-  shoppingItems: ShoppingItem[];
-  vendors: Vendor[];
-  shagunGifts: ShagunGift[];
-  checklistTasks: ChecklistTask[];
+  shoppingItems: (ShoppingItem | ShoppingItemEntity)[];
+  vendors: (Vendor | VendorEntity)[];
+  shagunGifts: (ShagunGift | GiftEntity)[];
+  checklistTasks: (ChecklistTask | ChecklistTaskEntity)[];
+
+  // Summaries
+  vendorSummary: VendorSummaryData | null;
+  shoppingSummary: ShoppingSummaryData | null;
+  giftsSummary: GiftsSummaryData | null;
+  checklistSummary: ChecklistSummaryData | null;
 
   // Loading & State
   isLoadingFinancials: boolean;
   financialError: string | null;
 
-  // Mutations
+  // Phase 3 Mutations
   addExpense: (expense: any) => Promise<any>;
   updateExpense: (id: string, expense: any) => Promise<any>;
   deleteExpense: (id: string) => Promise<boolean>;
   updateBudget: (newBudget: number) => Promise<any>;
   refreshFinancials: () => Promise<void>;
 
-  addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => ShoppingItem;
-  addVendor: (vendor: Omit<Vendor, 'id'>) => Vendor;
-  addShagunGift: (gift: Omit<ShagunGift, 'id'>) => ShagunGift;
-  addChecklistTask: (task: Omit<ChecklistTask, 'id'>) => ChecklistTask;
-  toggleTaskCompletion: (taskId: string) => void;
+  // Phase 4 Vendor Mutations
+  addVendor: (vendor: any) => Promise<any>;
+  updateVendor: (id: string, vendor: any) => Promise<any>;
+  deleteVendor: (id: string) => Promise<boolean>;
+  addVendorPayment: (vendorId: string, payment: any) => Promise<any>;
+  deleteVendorPayment: (vendorId: string, paymentId: string) => Promise<boolean>;
+
+  // Phase 4 Shopping Mutations
+  addShoppingItem: (item: any) => Promise<any>;
+  updateShoppingItem: (id: string, item: any) => Promise<any>;
+  deleteShoppingItem: (id: string) => Promise<boolean>;
+
+  // Phase 4 Gifts & Shagun Mutations
+  addShagunGift: (gift: any) => Promise<any>;
+  updateShagunGift: (id: string, gift: any) => Promise<any>;
+  deleteShagunGift: (id: string) => Promise<boolean>;
+
+  // Phase 4 Checklist Mutations
+  addChecklistTask: (task: any) => Promise<any>;
+  updateChecklistTask: (id: string, task: any) => Promise<any>;
+  toggleTaskCompletion: (taskId: string) => Promise<void>;
+  deleteChecklistTask: (id: string) => Promise<boolean>;
+
+  // Refresh all Phase 4 modules
+  refreshModules: () => Promise<void>;
 
   // Helper notice state
   lastActionMessage: string | null;
@@ -75,22 +108,35 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [isAuthenticated]);
 
-  // Real backend state
+  // Real backend states
   const [persistedExpenses, setPersistedExpenses] = useState<ExpenseEntity[]>([]);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummaryData | null>(null);
   const [persistedBudget, setPersistedBudget] = useState<number>(2500000);
   const [isLoadingFinancials, setIsLoadingFinancials] = useState<boolean>(false);
   const [financialError, setFinancialError] = useState<string | null>(null);
 
+  // Phase 4 Persisted states
+  const [persistedVendors, setPersistedVendors] = useState<VendorEntity[]>([]);
+  const [vendorSummary, setVendorSummary] = useState<VendorSummaryData | null>(null);
+
+  const [persistedShopping, setPersistedShopping] = useState<ShoppingItemEntity[]>([]);
+  const [shoppingSummary, setShoppingSummary] = useState<ShoppingSummaryData | null>(null);
+
+  const [persistedGifts, setPersistedGifts] = useState<GiftEntity[]>([]);
+  const [giftsSummary, setGiftsSummary] = useState<GiftsSummaryData | null>(null);
+
+  const [persistedChecklist, setPersistedChecklist] = useState<ChecklistTaskEntity[]>([]);
+  const [checklistSummary, setChecklistSummary] = useState<ChecklistSummaryData | null>(null);
+
   // In-memory states for Phase 1 demo mode
   const [mockExpenses, setMockExpenses] = useState<Expense[]>(MOCK_EXPENSES);
-  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(MOCK_SHOPPING_ITEMS);
-  const [vendors, setVendors] = useState<Vendor[]>(MOCK_VENDORS);
-  const [shagunGifts, setShagunGifts] = useState<ShagunGift[]>(MOCK_SHAGUN_GIFTS);
-  const [checklistTasks, setChecklistTasks] = useState<ChecklistTask[]>(MOCK_CHECKLIST_TASKS);
+  const [mockShopping, setMockShopping] = useState<ShoppingItem[]>(MOCK_SHOPPING_ITEMS);
+  const [mockVendors, setMockVendors] = useState<Vendor[]>(MOCK_VENDORS);
+  const [mockGifts, setMockGifts] = useState<ShagunGift[]>(MOCK_SHAGUN_GIFTS);
+  const [mockChecklist, setMockChecklist] = useState<ChecklistTask[]>(MOCK_CHECKLIST_TASKS);
   const [lastActionMessage, setLastActionMessage] = useState<string | null>(null);
 
-  const getAuthHeaders = (): Record<string, string> => {
+  const getAuthHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     try {
       const token = localStorage.getItem('shaadisaathi_session_token');
@@ -99,9 +145,9 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Storage restricted
     }
     return headers;
-  };
+  }, []);
 
-  // Refresh Real Database Financials
+  // Refresh Real Database Financials (Phase 3)
   const refreshFinancials = useCallback(async () => {
     if (!isAuthenticated) return;
 
@@ -123,24 +169,93 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setFinancialSummary(summaryData);
       }
 
-      // 3. Fetch Expenses List
-      const listRes = await fetch('/api/expenses?limit=100', { headers: getAuthHeaders() });
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        setPersistedExpenses(listData.expenses || []);
+      // 3. Fetch Full Expenses List
+      const expensesRes = await fetch('/api/expenses?limit=100', { headers: getAuthHeaders() });
+      if (expensesRes.ok) {
+        const expData = await expensesRes.json();
+        setPersistedExpenses(expData.expenses || []);
       }
     } catch (err: any) {
       setFinancialError(err.message || 'Failed to load financial records.');
     } finally {
       setIsLoadingFinancials(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, getAuthHeaders]);
 
+  // Refresh All Phase 4 Modules
+  const refreshModules = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const headers = getAuthHeaders();
+
+      // 1. Vendors
+      const [vListRes, vSumRes] = await Promise.all([
+        fetch('/api/vendors', { headers }),
+        fetch('/api/vendors/summary', { headers }),
+      ]);
+      if (vListRes.ok) {
+        const vData = await vListRes.json();
+        setPersistedVendors(vData.vendors || []);
+      }
+      if (vSumRes.ok) {
+        const vSumData = await vSumRes.json();
+        setVendorSummary(vSumData);
+      }
+
+      // 2. Shopping
+      const [sListRes, sSumRes] = await Promise.all([
+        fetch('/api/shopping', { headers }),
+        fetch('/api/shopping/summary', { headers }),
+      ]);
+      if (sListRes.ok) {
+        const sData = await sListRes.json();
+        setPersistedShopping(sData.items || []);
+      }
+      if (sSumRes.ok) {
+        const sSumData = await sSumRes.json();
+        setShoppingSummary(sSumData);
+      }
+
+      // 3. Gifts
+      const [gListRes, gSumRes] = await Promise.all([
+        fetch('/api/gifts', { headers }),
+        fetch('/api/gifts/summary', { headers }),
+      ]);
+      if (gListRes.ok) {
+        const gData = await gListRes.json();
+        setPersistedGifts(gData.gifts || []);
+      }
+      if (gSumRes.ok) {
+        const gSumData = await gSumRes.json();
+        setGiftsSummary(gSumData);
+      }
+
+      // 4. Checklist
+      const [cListRes, cSumRes] = await Promise.all([
+        fetch('/api/checklist', { headers }),
+        fetch('/api/checklist/summary', { headers }),
+      ]);
+      if (cListRes.ok) {
+        const cData = await cListRes.json();
+        setPersistedChecklist(cData.tasks || []);
+      }
+      if (cSumRes.ok) {
+        const cSumData = await cSumRes.json();
+        setChecklistSummary(cSumData);
+      }
+    } catch {
+      // Non-fatal background fetch
+    }
+  }, [isAuthenticated, getAuthHeaders]);
+
+  // Initial fetch when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       refreshFinancials();
+      refreshModules();
     }
-  }, [isAuthenticated, refreshFinancials]);
+  }, [isAuthenticated, refreshFinancials, refreshModules]);
 
   const togglePreviewMode = () => {
     setIsPreviewMode((prev) => !prev);
@@ -154,7 +269,7 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLastActionMessage(null);
   };
 
-  // Real Add Expense
+  // --- Phase 3 Mutations ---
   const addExpense = async (newExp: any): Promise<any> => {
     if (isAuthenticated && !isPreviewMode) {
       const res = await fetch('/api/expenses', {
@@ -172,7 +287,6 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLastActionMessage('Expense successfully recorded to database.');
       return data.expense;
     } else {
-      // Mock mode fallback
       const created: Expense = {
         ...newExp,
         id: `exp-${Date.now()}`,
@@ -186,7 +300,6 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Real Update Expense
   const updateExpense = async (id: string, updatedData: any): Promise<any> => {
     if (isAuthenticated && !isPreviewMode) {
       const res = await fetch(`/api/expenses/${id}`, {
@@ -212,7 +325,6 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Real Delete Expense
   const deleteExpense = async (id: string): Promise<boolean> => {
     if (isAuthenticated && !isPreviewMode) {
       const res = await fetch(`/api/expenses/${id}`, {
@@ -235,7 +347,6 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Real Update Budget
   const updateBudget = async (newBudget: number): Promise<any> => {
     if (isAuthenticated && !isPreviewMode) {
       const res = await fetch('/api/budget', {
@@ -260,69 +371,388 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Add Shopping Item
-  const addShoppingItem = (newItem: Omit<ShoppingItem, 'id'>): ShoppingItem => {
-    const created: ShoppingItem = {
-      ...newItem,
-      id: `shop-${Date.now()}`,
-    };
-    setShoppingItems((prev) => [created, ...prev]);
-    setLastActionMessage('Shopping item saved in local session!');
-    return created;
-  };
-
-  // Add Vendor
-  const addVendor = (newVendor: Omit<Vendor, 'id'>): Vendor => {
-    const created: Vendor = {
-      ...newVendor,
-      id: `ven-${Date.now()}`,
-    };
-    setVendors((prev) => [created, ...prev]);
-    setLastActionMessage('Vendor added to local session!');
-    return created;
-  };
-
-  // Add Shagun
-  const addShagunGift = (newGift: Omit<ShagunGift, 'id'>): ShagunGift => {
-    const created: ShagunGift = {
-      ...newGift,
-      id: `shagun-${Date.now()}`,
-    };
-    setShagunGifts((prev) => [created, ...prev]);
-    setLastActionMessage('Shagun recorded in local session!');
-    return created;
-  };
-
-  // Add Task
-  const addChecklistTask = (newTask: Omit<ChecklistTask, 'id'>): ChecklistTask => {
-    const created: ChecklistTask = {
-      ...newTask,
-      id: `task-${Date.now()}`,
-    };
-    setChecklistTasks((prev) => [created, ...prev]);
-    setLastActionMessage('Task added to local session!');
-    return created;
-  };
-
-  // Toggle Task Completion
-  const toggleTaskCompletion = (taskId: string) => {
-    setChecklistTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t))
-    );
-  };
-
-  // Active Expenses depending on mode
-  const activeExpenses: (Expense | ExpenseEntity)[] = useMemo(() => {
-    if (isPreviewMode) {
-      return mockExpenses;
+  // --- Phase 4 Vendor Mutations ---
+  const addVendor = async (newVendor: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch('/api/vendors', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newVendor),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to register vendor.');
+      }
+      await refreshModules();
+      if (newVendor.recordAdvanceInExpenses) {
+        await refreshFinancials();
+      }
+      setLastActionMessage('Vendor successfully registered in database.');
+      return data.vendor;
+    } else {
+      const created: Vendor = {
+        ...newVendor,
+        id: `ven-${Date.now()}`,
+        balanceDue: Math.max(0, newVendor.agreedAmount - (newVendor.advancePaid || 0)),
+        status: (newVendor.advancePaid || 0) >= newVendor.agreedAmount
+          ? 'fully_paid'
+          : (newVendor.advancePaid || 0) > 0 ? 'advance_paid' : 'booked',
+      };
+      setMockVendors((prev) => [created, ...prev]);
+      setLastActionMessage('Vendor added to local preview.');
+      return created;
     }
-    return persistedExpenses;
+  };
+
+  const updateVendor = async (id: string, updatedData: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/vendors/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update vendor.');
+      }
+      await refreshModules();
+      setLastActionMessage('Vendor updated successfully.');
+      return data.vendor;
+    } else {
+      setMockVendors((prev) =>
+        prev.map((v) => (v.id === id ? { ...v, ...updatedData } : v))
+      );
+      setLastActionMessage('Vendor updated in preview.');
+      return updatedData;
+    }
+  };
+
+  const deleteVendor = async (id: string): Promise<boolean> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/vendors/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to delete vendor.');
+      }
+      await refreshModules();
+      setLastActionMessage('Vendor removed from database.');
+      return true;
+    } else {
+      setMockVendors((prev) => prev.filter((v) => v.id !== id));
+      setLastActionMessage('Vendor removed from preview.');
+      return true;
+    }
+  };
+
+  const addVendorPayment = async (vendorId: string, payment: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/vendors/${vendorId}/payments`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payment),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to log vendor payment.');
+      }
+      await refreshModules();
+      if (payment.recordInExpenses) {
+        await refreshFinancials();
+      }
+      setLastActionMessage('Vendor payment logged successfully.');
+      return data.payment;
+    } else {
+      setMockVendors((prev) =>
+        prev.map((v) => {
+          if (v.id === vendorId) {
+            const newPaid = (v.advancePaid || 0) + Number(payment.amount);
+            const newBalance = Math.max(0, v.agreedAmount - newPaid);
+            return {
+              ...v,
+              advancePaid: newPaid,
+              balanceDue: newBalance,
+              status: newBalance === 0 ? 'fully_paid' : 'advance_paid',
+            };
+          }
+          return v;
+        })
+      );
+      setLastActionMessage('Vendor payment logged in preview.');
+      return payment;
+    }
+  };
+
+  const deleteVendorPayment = async (vendorId: string, paymentId: string): Promise<boolean> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/vendors/${vendorId}/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to delete vendor payment.');
+      }
+      await refreshModules();
+      await refreshFinancials();
+      return true;
+    }
+    return true;
+  };
+
+  // --- Phase 4 Shopping Mutations ---
+  const addShoppingItem = async (newItem: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch('/api/shopping', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newItem),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to record shopping item.');
+      }
+      await refreshModules();
+      setLastActionMessage('Shopping item recorded in database.');
+      return data.item;
+    } else {
+      const created: ShoppingItem = {
+        ...newItem,
+        id: `shop-${Date.now()}`,
+        status: newItem.status || 'planned',
+      };
+      setMockShopping((prev) => [created, ...prev]);
+      setLastActionMessage('Shopping item saved in local preview.');
+      return created;
+    }
+  };
+
+  const updateShoppingItem = async (id: string, updatedData: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/shopping/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update shopping item.');
+      }
+      await refreshModules();
+      setLastActionMessage('Shopping item updated.');
+      return data.item;
+    } else {
+      setMockShopping((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, ...updatedData } : i))
+      );
+      setLastActionMessage('Shopping item updated in preview.');
+      return updatedData;
+    }
+  };
+
+  const deleteShoppingItem = async (id: string): Promise<boolean> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/shopping/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to remove shopping item.');
+      }
+      await refreshModules();
+      setLastActionMessage('Shopping item removed.');
+      return true;
+    } else {
+      setMockShopping((prev) => prev.filter((i) => i.id !== id));
+      setLastActionMessage('Shopping item removed from preview.');
+      return true;
+    }
+  };
+
+  // --- Phase 4 Gifts & Shagun Mutations ---
+  const addShagunGift = async (newGift: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch('/api/gifts', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newGift),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to record gift / shagun.');
+      }
+      await refreshModules();
+      setLastActionMessage('Gift / Shagun recorded to sacred ledger.');
+      return data.gift;
+    } else {
+      const created: ShagunGift = {
+        ...newGift,
+        id: `shagun-${Date.now()}`,
+        donorName: newGift.donorName || newGift.giverName || 'Family Relative',
+        eventName: newGift.eventName || 'wedding',
+        date: newGift.date || new Date().toISOString().split('T')[0],
+        thankYouSent: Boolean(newGift.thankYouSent),
+      };
+      setMockGifts((prev) => [created, ...prev]);
+      setLastActionMessage('Shagun recorded in local preview.');
+      return created;
+    }
+  };
+
+  const updateShagunGift = async (id: string, updatedData: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/gifts/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update gift record.');
+      }
+      await refreshModules();
+      setLastActionMessage('Gift record updated.');
+      return data.gift;
+    } else {
+      setMockGifts((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, ...updatedData } : g))
+      );
+      setLastActionMessage('Gift updated in preview.');
+      return updatedData;
+    }
+  };
+
+  const deleteShagunGift = async (id: string): Promise<boolean> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/gifts/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to delete gift.');
+      }
+      await refreshModules();
+      setLastActionMessage('Gift record removed.');
+      return true;
+    } else {
+      setMockGifts((prev) => prev.filter((g) => g.id !== id));
+      setLastActionMessage('Gift removed from preview.');
+      return true;
+    }
+  };
+
+  // --- Phase 4 Checklist Mutations ---
+  const addChecklistTask = async (newTask: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch('/api/checklist', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newTask),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create checklist task.');
+      }
+      await refreshModules();
+      setLastActionMessage('Task added to wedding checklist.');
+      return data.task;
+    } else {
+      const created: ChecklistTask = {
+        ...newTask,
+        id: `task-${Date.now()}`,
+        isCompleted: false,
+      };
+      setMockChecklist((prev) => [created, ...prev]);
+      setLastActionMessage('Task added to local preview.');
+      return created;
+    }
+  };
+
+  const updateChecklistTask = async (id: string, updatedData: any): Promise<any> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/checklist/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update task.');
+      }
+      await refreshModules();
+      setLastActionMessage('Task updated.');
+      return data.task;
+    } else {
+      setMockChecklist((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...updatedData } : t))
+      );
+      setLastActionMessage('Task updated in preview.');
+      return updatedData;
+    }
+  };
+
+  const toggleTaskCompletion = async (taskId: string): Promise<void> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/checklist/${taskId}/toggle`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to toggle task.');
+      }
+      await refreshModules();
+    } else {
+      setMockChecklist((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t))
+      );
+    }
+  };
+
+  const deleteChecklistTask = async (id: string): Promise<boolean> => {
+    if (isAuthenticated && !isPreviewMode) {
+      const res = await fetch(`/api/checklist/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to delete task.');
+      }
+      await refreshModules();
+      setLastActionMessage('Task deleted from checklist.');
+      return true;
+    } else {
+      setMockChecklist((prev) => prev.filter((t) => t.id !== id));
+      setLastActionMessage('Task removed from preview.');
+      return true;
+    }
+  };
+
+  // Active items depending on mode
+  const activeExpenses: (Expense | ExpenseEntity)[] = useMemo(() => {
+    return isPreviewMode ? mockExpenses : persistedExpenses;
   }, [isPreviewMode, mockExpenses, persistedExpenses]);
 
-  const activeShopping = useMemo(() => (isPreviewMode ? shoppingItems : []), [isPreviewMode, shoppingItems]);
-  const activeVendors = useMemo(() => (isPreviewMode ? vendors : []), [isPreviewMode, vendors]);
-  const activeShagun = useMemo(() => (isPreviewMode ? shagunGifts : []), [isPreviewMode, shagunGifts]);
-  const activeChecklist = useMemo(() => (isPreviewMode ? checklistTasks : []), [isPreviewMode, checklistTasks]);
+  const activeShopping: (ShoppingItem | ShoppingItemEntity)[] = useMemo(() => {
+    return isPreviewMode ? mockShopping : persistedShopping;
+  }, [isPreviewMode, mockShopping, persistedShopping]);
+
+  const activeVendors: (Vendor | VendorEntity)[] = useMemo(() => {
+    return isPreviewMode ? mockVendors : persistedVendors;
+  }, [isPreviewMode, mockVendors, persistedVendors]);
+
+  const activeGifts: (ShagunGift | GiftEntity)[] = useMemo(() => {
+    return isPreviewMode ? mockGifts : persistedGifts;
+  }, [isPreviewMode, mockGifts, persistedGifts]);
+
+  const activeChecklist: (ChecklistTask | ChecklistTaskEntity)[] = useMemo(() => {
+    return isPreviewMode ? mockChecklist : persistedChecklist;
+  }, [isPreviewMode, mockChecklist, persistedChecklist]);
 
   // Derived financial summary
   const summary: WeddingSummary = useMemo(() => {
@@ -331,7 +761,7 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (sum, e) => sum + (e.status === 'paid' ? e.amount : 0),
         0
       );
-      const totalPending = vendors.reduce((sum, v) => sum + v.balanceDue, 0);
+      const totalPending = mockVendors.reduce((sum, v) => sum + v.balanceDue, 0);
       const totalBudget = INITIAL_WEDDING_SUMMARY.totalBudget;
       const remaining = totalBudget - totalSpent;
       const utilization = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
@@ -370,7 +800,7 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       totalPendingPayments: 0,
       budgetUtilizationPct: 0,
     };
-  }, [isPreviewMode, mockExpenses, vendors, financialSummary, user, persistedBudget]);
+  }, [isPreviewMode, mockExpenses, mockVendors, financialSummary, user, persistedBudget]);
 
   // Category breakdown
   const budgetCategories: BudgetItem[] = useMemo(() => {
@@ -379,6 +809,7 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const categorySpent = mockExpenses
           .filter((e) => e.category === cat.category)
           .reduce((sum, e) => sum + e.amount, 0);
+
         return {
           ...cat,
           spentAmount: categorySpent,
@@ -386,50 +817,68 @@ export const WeddingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
     }
 
-    if (financialSummary?.categoryBreakdown) {
-      return financialSummary.categoryBreakdown.map((c) => ({
-        category: c.category,
-        allocatedAmount: 0,
-        spentAmount: c.totalAmount,
+    if (financialSummary) {
+      return financialSummary.categoryBreakdown.map((item) => ({
+        category: item.category,
+        allocatedAmount: item.totalAmount,
+        spentAmount: item.totalPaid,
       }));
     }
 
     return [];
   }, [isPreviewMode, mockExpenses, financialSummary]);
 
-  return (
-    <WeddingContext.Provider
-      value={{
-        isPreviewMode,
-        togglePreviewMode,
-        setPreviewMode,
-        summary,
-        financialSummary,
-        budgetCategories,
-        expenses: activeExpenses,
-        shoppingItems: activeShopping,
-        vendors: activeVendors,
-        shagunGifts: activeShagun,
-        checklistTasks: activeChecklist,
-        isLoadingFinancials,
-        financialError,
-        addExpense,
-        updateExpense,
-        deleteExpense,
-        updateBudget,
-        refreshFinancials,
-        addShoppingItem,
-        addVendor,
-        addShagunGift,
-        addChecklistTask,
-        toggleTaskCompletion,
-        lastActionMessage,
-        clearActionMessage,
-      }}
-    >
-      {children}
-    </WeddingContext.Provider>
-  );
+  const value: WeddingContextType = {
+    isPreviewMode,
+    togglePreviewMode,
+    setPreviewMode,
+    summary,
+    financialSummary,
+    budgetCategories,
+    expenses: activeExpenses,
+    shoppingItems: activeShopping,
+    vendors: activeVendors,
+    shagunGifts: activeGifts,
+    checklistTasks: activeChecklist,
+    vendorSummary,
+    shoppingSummary,
+    giftsSummary,
+    checklistSummary,
+    isLoadingFinancials,
+    financialError,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    updateBudget,
+    refreshFinancials,
+    addVendor,
+    updateVendor,
+    deleteVendor,
+    addVendorPayment,
+    deleteVendorPayment,
+    addShoppingItem,
+    updateShoppingItem,
+    deleteShoppingItem,
+    addShagunGift,
+    updateShagunGift,
+    deleteShagunGift,
+    addChecklistTask,
+    updateChecklistTask,
+    toggleTaskCompletion,
+    deleteChecklistTask,
+    refreshModules,
+    lastActionMessage,
+    clearActionMessage,
+  };
+
+  return <WeddingContext.Provider value={value}>{children}</WeddingContext.Provider>;
 };
 
-export { useWedding };
+export const useWedding = (): WeddingContextType => {
+  const context = React.useContext(WeddingContext);
+  if (!context) {
+    throw new Error('useWedding must be used within a WeddingProvider');
+  }
+  return context;
+};
+

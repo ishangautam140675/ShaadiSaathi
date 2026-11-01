@@ -1,6 +1,6 @@
 # ShaadiSaathi &bull; Project Architecture Document
 
-**Version:** 3.0.0-phase3  
+**Version:** 4.0.0-phase4  
 **Project:** ShaadiSaathi (शादीसाथी) &bull; Premium Bilingual Wedding Management Progressive Web App  
 **Tagline:** "Every Moment Special. Every Rupee Accounted For." / "हर पल ख़ास, हर रुपये का हिसाब।"
 
@@ -201,6 +201,118 @@ CREATE TABLE expense_audit_logs (
   FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
   FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- 8. Wedding Vendors (Phase 4)
+CREATE TABLE vendors (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  contact_person TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  address TEXT,
+  agreed_amount REAL NOT NULL DEFAULT 0,
+  agreed_amount_paise INTEGER NOT NULL DEFAULT 0,
+  advance_paid REAL NOT NULL DEFAULT 0,
+  advance_paid_paise INTEGER NOT NULL DEFAULT 0,
+  balance_due REAL NOT NULL DEFAULT 0,
+  balance_due_paise INTEGER NOT NULL DEFAULT 0,
+  payment_due_date TEXT,
+  status TEXT NOT NULL DEFAULT 'booked', -- 'booked', 'advance_paid', 'fully_paid', 'cancelled'
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE
+);
+
+-- 9. Vendor Payments (Phase 4)
+CREATE TABLE vendor_payments (
+  id TEXT PRIMARY KEY,
+  vendor_id TEXT NOT NULL,
+  family_id TEXT NOT NULL,
+  amount REAL NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  payment_date TEXT NOT NULL,
+  payment_mode TEXT NOT NULL DEFAULT 'bank_transfer',
+  transaction_ref TEXT,
+  notes TEXT,
+  expense_id TEXT, -- Optional link to operational expense
+  recorded_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE SET NULL,
+  FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 10. Wedding Shopping Items (Phase 4)
+CREATE TABLE shopping_items (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'clothing',
+  description TEXT,
+  estimated_price REAL NOT NULL DEFAULT 0,
+  estimated_price_paise INTEGER NOT NULL DEFAULT 0,
+  actual_price REAL,
+  actual_price_paise INTEGER,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'planned', -- 'planned', 'to_buy', 'in_tailoring', 'purchased', 'cancelled'
+  assigned_to TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'medium', -- 'urgent', 'high', 'medium', 'low'
+  deadline TEXT,
+  store_name TEXT,
+  notes TEXT,
+  created_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 11. Sacred Gifts & Shagun Register (Phase 4 - Decoupled from Expenses)
+CREATE TABLE gifts_shagun (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  giver_name TEXT NOT NULL,
+  relation TEXT,
+  gift_type TEXT NOT NULL DEFAULT 'cash', -- 'cash', 'physical_gift', 'jewellery', 'other'
+  amount REAL,
+  amount_paise INTEGER NOT NULL DEFAULT 0,
+  description TEXT,
+  side TEXT NOT NULL DEFAULT 'mutual', -- 'bride', 'groom', 'mutual'
+  date_received TEXT NOT NULL,
+  received_by TEXT,
+  thank_you_sent INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 12. Wedding Checklist Tasks (Phase 4)
+CREATE TABLE checklist_tasks (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  category TEXT,
+  phase TEXT NOT NULL DEFAULT '1_month', -- '6_months', '3_months', '1_month', 'wedding_week', 'day_of', 'post_wedding'
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'completed'
+  assigned_to TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
+  due_date TEXT,
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  completed_at TEXT,
+  notes TEXT,
+  created_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
 
 ### Financial Precision & Monetary Architecture (Phase 3)
@@ -238,7 +350,7 @@ CREATE TABLE expense_audit_logs (
 | **Phase 1** | Foundation, Design System & Responsive Shell | **COMPLETED** | PWA foundation, 10 screens, bilingual i18n (EN/HI), luxury palette, Vitest test suite. |
 | **Phase 2** | Secure Authentication, Family Invitations & RBAC | **COMPLETED** | Native Node/SQLite database, multi-device sessions, Scrypt hashing, invite-only onboarding, role enforcement, 23 automated tests. |
 | **Phase 3** | Wedding Budget, Expenses & Real Database Persistence | **COMPLETED** | Real SQLite database CRUD for wedding budget & expenses, integer paise precision, partial payments, search/filter/pagination, audit trail, 43 automated tests. |
-| **Phase 4** | Offline IndexedDB Engine & Sync Conflict Handler | Planned | Background synchronization, optimistic UI updates, conflict resolution with vector clocks. |
-| **Phase 5** | Advanced Financial Reports & PDF / Excel Export | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports. |
+| **Phase 4** | Vendors, Payment Tracking, Shopping, Gifts & Checklist | **COMPLETED** | Complete CRUD for vendors, payment log with expense linking, shopping variance analysis, sacred gifts/shagun decoupled ledger, and wedding checklist, 56 automated tests. |
+| **Phase 5** | Advanced Financial Reports, PDF / Excel Export & Offline Sync | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports, and background sync. |
 | **Phase 6** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |
 | **Phase 7** | Zero-Lock-In Backup & Portability Engine | Planned | One-click raw JSON / CSV complete wedding archive backup and restore capability. |

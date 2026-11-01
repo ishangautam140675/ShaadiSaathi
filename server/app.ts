@@ -7,6 +7,10 @@ import { InvitationService } from './services/invitationService.ts';
 import { FamilyService } from './services/familyService.ts';
 import { BudgetService } from './services/budgetService.ts';
 import { ExpenseService, type ExpenseCategory, type PaymentStatus } from './services/expenseService.ts';
+import { VendorService } from './services/vendorService.ts';
+import { ShoppingService } from './services/shoppingService.ts';
+import { GiftService } from './services/giftService.ts';
+import { ChecklistService } from './services/checklistService.ts';
 import { createAuthMiddleware, type AuthenticatedRequest } from './middleware/authMiddleware.ts';
 import { requireRoles } from './middleware/rbacMiddleware.ts';
 import { createRateLimitMiddleware, clearRateLimit } from './middleware/rateLimitMiddleware.ts';
@@ -19,6 +23,10 @@ export interface AppContext {
   familyService: FamilyService;
   budgetService: BudgetService;
   expenseService: ExpenseService;
+  vendorService: VendorService;
+  shoppingService: ShoppingService;
+  giftService: GiftService;
+  checklistService: ChecklistService;
 }
 
 export const createServerApp = (customDb?: AppDatabase): AppContext => {
@@ -30,6 +38,10 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const familyService = new FamilyService(appDb);
   const budgetService = new BudgetService(appDb);
   const expenseService = new ExpenseService(appDb);
+  const vendorService = new VendorService(appDb);
+  const shoppingService = new ShoppingService(appDb);
+  const giftService = new GiftService(appDb);
+  const checklistService = new ChecklistService(appDb);
 
   const authMiddleware = createAuthMiddleware(authService);
   const rateLimitMiddleware = createRateLimitMiddleware(appDb);
@@ -555,6 +567,706 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     }
   );
 
+  // -------------------------------------------------------------
+  // 6. Vendor & Payment Tracking Routes (Phase 4)
+  // -------------------------------------------------------------
+  app.get('/api/vendors', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { search, category, status, sortBy, sortOrder } = req.query;
+      const vendors = vendorService.listVendors(req.user!.family_id, {
+        search: typeof search === 'string' ? search : undefined,
+        category: typeof category === 'string' ? category : undefined,
+        status: typeof status === 'string' ? status : undefined,
+        sortBy: typeof sortBy === 'string' ? (sortBy as any) : undefined,
+        sortOrder: typeof sortOrder === 'string' ? (sortOrder as any) : undefined,
+      });
+      res.json({ vendors });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_VENDORS_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/vendors/summary', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = vendorService.getVendorFinancialSummary(req.user!.family_id);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_VENDOR_SUMMARY_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/vendors/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const vendor = vendorService.getVendorById(req.params.id as string, req.user!.family_id);
+      if (!vendor) {
+        res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: 'Vendor not found.' });
+        return;
+      }
+      res.json({ vendor });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_VENDOR_FAILED', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/vendors',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          name,
+          category,
+          contactPerson,
+          phone,
+          email,
+          city,
+          address,
+          agreedAmount,
+          advancePaid,
+          dueDate,
+          eventName,
+          notes,
+          recordAdvanceInExpenses,
+        } = req.body;
+
+        const numericAgreed = typeof agreedAmount === 'string' ? parseFloat(agreedAmount) : Number(agreedAmount);
+        const numericAdvance = advancePaid !== undefined && advancePaid !== null && advancePaid !== ''
+          ? (typeof advancePaid === 'string' ? parseFloat(advancePaid) : Number(advancePaid))
+          : undefined;
+
+        const vendor = vendorService.createVendor(req.user!.family_id, req.user!.id, {
+          name,
+          category,
+          contactPerson,
+          phone,
+          email,
+          city,
+          address,
+          agreedAmount: numericAgreed,
+          advancePaid: numericAdvance,
+          dueDate,
+          eventName,
+          notes,
+          recordAdvanceInExpenses: Boolean(recordAdvanceInExpenses),
+        });
+
+        res.status(201).json({
+          message: 'Vendor successfully registered.',
+          vendor,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'CREATE_VENDOR_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.put(
+    '/api/vendors/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          name,
+          category,
+          contactPerson,
+          phone,
+          email,
+          city,
+          address,
+          agreedAmount,
+          dueDate,
+          status,
+          eventName,
+          notes,
+        } = req.body;
+
+        const numericAgreed = agreedAmount !== undefined && agreedAmount !== null && agreedAmount !== ''
+          ? (typeof agreedAmount === 'string' ? parseFloat(agreedAmount) : Number(agreedAmount))
+          : undefined;
+
+        const updated = vendorService.updateVendor(req.params.id as string, req.user!.family_id, req.user!.id, {
+          name,
+          category,
+          contactPerson,
+          phone,
+          email,
+          city,
+          address,
+          agreedAmount: numericAgreed,
+          dueDate,
+          status,
+          eventName,
+          notes,
+        });
+
+        res.json({
+          message: 'Vendor successfully updated.',
+          vendor: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('VENDOR_NOT_FOUND')) {
+          res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'UPDATE_VENDOR_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/vendors/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        vendorService.deleteVendor(req.params.id as string, req.user!.family_id);
+        res.json({ message: 'Vendor record successfully deleted.' });
+      } catch (err: any) {
+        if (err.message.includes('VENDOR_NOT_FOUND')) {
+          res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'DELETE_VENDOR_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // Vendor Payments
+  app.get('/api/vendors/:id/payments', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const payments = vendorService.listVendorPayments(req.params.id as string, req.user!.family_id);
+      res.json({ payments });
+    } catch (err: any) {
+      if (err.message.includes('VENDOR_NOT_FOUND')) {
+        res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: err.message });
+        return;
+      }
+      res.status(400).json({ error: 'FETCH_VENDOR_PAYMENTS_FAILED', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/vendors/:id/payments',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const { amount, paymentDate, paymentMethod, transactionReference, notes, recordInExpenses, allowOverpayment } = req.body;
+        const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+
+        const payment = vendorService.addVendorPayment(req.params.id as string, req.user!.family_id, req.user!.id, {
+          amount: numericAmount,
+          paymentDate,
+          paymentMethod: paymentMethod || 'other',
+          transactionReference,
+          notes,
+          recordInExpenses: Boolean(recordInExpenses),
+          allowOverpayment: Boolean(allowOverpayment),
+        });
+
+        res.status(201).json({
+          message: 'Payment successfully logged for vendor.',
+          payment,
+        });
+      } catch (err: any) {
+        if (err.message.includes('VENDOR_NOT_FOUND')) {
+          res.status(404).json({ error: 'VENDOR_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'LOG_PAYMENT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/vendors/:id/payments/:paymentId',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        vendorService.deleteVendorPayment(
+          req.params.paymentId as string,
+          req.params.id as string,
+          req.user!.family_id
+        );
+        res.json({ message: 'Vendor payment record successfully removed.' });
+      } catch (err: any) {
+        if (err.message.includes('NOT_FOUND')) {
+          res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'DELETE_PAYMENT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 7. Shopping Register Routes (Phase 4)
+  // -------------------------------------------------------------
+  app.get('/api/shopping', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { search, category, status, priority, assignedTo } = req.query;
+      const items = shoppingService.listShoppingItems(req.user!.family_id, {
+        search: typeof search === 'string' ? search : undefined,
+        category: typeof category === 'string' ? category : undefined,
+        status: typeof status === 'string' ? status : undefined,
+        priority: typeof priority === 'string' ? priority : undefined,
+        assignedTo: typeof assignedTo === 'string' ? assignedTo : undefined,
+      });
+      res.json({ items });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_SHOPPING_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/shopping/summary', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = shoppingService.getShoppingSummary(req.user!.family_id);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_SHOPPING_SUMMARY_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/shopping/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const item = shoppingService.getShoppingItemById(req.params.id as string, req.user!.family_id);
+      if (!item) {
+        res.status(404).json({ error: 'ITEM_NOT_FOUND', message: 'Shopping item not found.' });
+        return;
+      }
+      res.json({ item });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_ITEM_FAILED', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/shopping',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          name,
+          category,
+          description,
+          estimatedPrice,
+          actualPrice,
+          quantity,
+          status,
+          assignedTo,
+          priority,
+          deadline,
+          storeName,
+          notes,
+        } = req.body;
+
+        const numericEstimated = typeof estimatedPrice === 'string' ? parseFloat(estimatedPrice) : Number(estimatedPrice);
+        const numericActual = actualPrice !== undefined && actualPrice !== null && actualPrice !== ''
+          ? (typeof actualPrice === 'string' ? parseFloat(actualPrice) : Number(actualPrice))
+          : undefined;
+
+        const item = shoppingService.createShoppingItem(req.user!.family_id, req.user!.id, {
+          name,
+          category: category || 'other',
+          description,
+          estimatedPrice: numericEstimated,
+          actualPrice: numericActual,
+          quantity: quantity ? Number(quantity) : 1,
+          status,
+          assignedTo,
+          priority,
+          deadline,
+          storeName,
+          notes,
+        });
+
+        res.status(201).json({
+          message: 'Shopping item successfully recorded.',
+          item,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'CREATE_SHOPPING_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.put(
+    '/api/shopping/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          name,
+          category,
+          description,
+          estimatedPrice,
+          actualPrice,
+          quantity,
+          status,
+          assignedTo,
+          priority,
+          deadline,
+          storeName,
+          notes,
+        } = req.body;
+
+        const numericEstimated = estimatedPrice !== undefined && estimatedPrice !== null && estimatedPrice !== ''
+          ? (typeof estimatedPrice === 'string' ? parseFloat(estimatedPrice) : Number(estimatedPrice))
+          : undefined;
+        const numericActual = actualPrice !== undefined && actualPrice !== null && actualPrice !== ''
+          ? (typeof actualPrice === 'string' ? parseFloat(actualPrice) : Number(actualPrice))
+          : undefined;
+
+        const updated = shoppingService.updateShoppingItem(req.params.id as string, req.user!.family_id, req.user!.id, {
+          name,
+          category,
+          description,
+          estimatedPrice: numericEstimated,
+          actualPrice: numericActual,
+          quantity: quantity !== undefined ? Number(quantity) : undefined,
+          status,
+          assignedTo,
+          priority,
+          deadline,
+          storeName,
+          notes,
+        });
+
+        res.json({
+          message: 'Shopping item successfully updated.',
+          item: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('ITEM_NOT_FOUND')) {
+          res.status(404).json({ error: 'ITEM_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'UPDATE_SHOPPING_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/shopping/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        shoppingService.deleteShoppingItem(req.params.id as string, req.user!.family_id);
+        res.json({ message: 'Shopping item successfully removed.' });
+      } catch (err: any) {
+        if (err.message.includes('ITEM_NOT_FOUND')) {
+          res.status(404).json({ error: 'ITEM_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'DELETE_SHOPPING_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 8. Gifts & Shagun Register Routes (Phase 4)
+  // -------------------------------------------------------------
+  app.get('/api/gifts', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { search, side, giftType } = req.query;
+      const gifts = giftService.listGifts(req.user!.family_id, {
+        search: typeof search === 'string' ? search : undefined,
+        side: typeof side === 'string' ? side : undefined,
+        giftType: typeof giftType === 'string' ? giftType : undefined,
+      });
+      res.json({ gifts });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_GIFTS_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/gifts/summary', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = giftService.getGiftsSummary(req.user!.family_id);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_GIFTS_SUMMARY_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/gifts/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const gift = giftService.getGiftById(req.params.id as string, req.user!.family_id);
+      if (!gift) {
+        res.status(404).json({ error: 'GIFT_NOT_FOUND', message: 'Gift record not found.' });
+        return;
+      }
+      res.json({ gift });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_GIFT_FAILED', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/gifts',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          giverName,
+          donorName,
+          relation,
+          giftType,
+          amount,
+          cashAmount,
+          description,
+          itemDescription,
+          dateReceived,
+          recipient,
+          side,
+          notes,
+        } = req.body;
+
+        const rawAmount = amount !== undefined ? amount : cashAmount;
+        const numericAmount = rawAmount !== undefined && rawAmount !== null && rawAmount !== ''
+          ? (typeof rawAmount === 'string' ? parseFloat(rawAmount) : Number(rawAmount))
+          : 0;
+
+        const gift = giftService.createGift(req.user!.family_id, req.user!.id, {
+          giverName,
+          donorName,
+          relation,
+          giftType: giftType || 'cash',
+          amount: numericAmount,
+          description,
+          itemDescription,
+          dateReceived,
+          recipient,
+          side,
+          notes,
+        });
+
+        res.status(201).json({
+          message: 'Gift / Shagun successfully recorded.',
+          gift,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'CREATE_GIFT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.put(
+    '/api/gifts/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          giverName,
+          donorName,
+          relation,
+          giftType,
+          amount,
+          cashAmount,
+          description,
+          itemDescription,
+          dateReceived,
+          recipient,
+          side,
+          notes,
+        } = req.body;
+
+        const rawAmount = amount !== undefined ? amount : cashAmount;
+        const numericAmount = rawAmount !== undefined && rawAmount !== null && rawAmount !== ''
+          ? (typeof rawAmount === 'string' ? parseFloat(rawAmount) : Number(rawAmount))
+          : undefined;
+
+        const updated = giftService.updateGift(req.params.id as string, req.user!.family_id, req.user!.id, {
+          giverName,
+          donorName,
+          relation,
+          giftType,
+          amount: numericAmount,
+          description,
+          itemDescription,
+          dateReceived,
+          recipient,
+          side,
+          notes,
+        });
+
+        res.json({
+          message: 'Gift record successfully updated.',
+          gift: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('GIFT_NOT_FOUND')) {
+          res.status(404).json({ error: 'GIFT_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'UPDATE_GIFT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/gifts/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        giftService.deleteGift(req.params.id as string, req.user!.family_id);
+        res.json({ message: 'Gift record successfully deleted.' });
+      } catch (err: any) {
+        if (err.message.includes('GIFT_NOT_FOUND')) {
+          res.status(404).json({ error: 'GIFT_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'DELETE_GIFT_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 9. Wedding Checklist / Tasks Routes (Phase 4)
+  // -------------------------------------------------------------
+  app.get('/api/checklist', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { phase, status, priority } = req.query;
+      const tasks = checklistService.listTasks(req.user!.family_id, {
+        phase: typeof phase === 'string' ? phase : undefined,
+        status: typeof status === 'string' ? status : undefined,
+        priority: typeof priority === 'string' ? priority : undefined,
+      });
+      res.json({ tasks });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_CHECKLIST_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/checklist/summary', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = checklistService.getChecklistSummary(req.user!.family_id);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_CHECKLIST_SUMMARY_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/checklist/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const task = checklistService.getTaskById(req.params.id as string, req.user!.family_id);
+      if (!task) {
+        res.status(404).json({ error: 'TASK_NOT_FOUND', message: 'Task not found.' });
+        return;
+      }
+      res.json({ task });
+    } catch (err: any) {
+      res.status(400).json({ error: 'FETCH_TASK_FAILED', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/checklist',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const { title, category, phase, assignedTo, priority, dueDate, notes } = req.body;
+        const task = checklistService.createTask(req.user!.family_id, req.user!.id, {
+          title,
+          category,
+          phase,
+          assignedTo,
+          priority,
+          dueDate,
+          notes,
+        });
+
+        res.status(201).json({
+          message: 'Task successfully created.',
+          task,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'CREATE_TASK_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.put(
+    '/api/checklist/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const { title, category, phase, status, assignedTo, priority, dueDate, notes } = req.body;
+        const updated = checklistService.updateTask(req.params.id as string, req.user!.family_id, req.user!.id, {
+          title,
+          category,
+          phase,
+          status,
+          assignedTo,
+          priority,
+          dueDate,
+          notes,
+        });
+
+        res.json({
+          message: 'Task successfully updated.',
+          task: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('TASK_NOT_FOUND')) {
+          res.status(404).json({ error: 'TASK_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'UPDATE_TASK_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.patch(
+    '/api/checklist/:id/toggle',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const updated = checklistService.toggleTaskCompletion(req.params.id as string, req.user!.family_id);
+        res.json({
+          message: 'Task status toggled.',
+          task: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('TASK_NOT_FOUND')) {
+          res.status(404).json({ error: 'TASK_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'TOGGLE_TASK_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/checklist/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        checklistService.deleteTask(req.params.id as string, req.user!.family_id);
+        res.json({ message: 'Task successfully deleted.' });
+      } catch (err: any) {
+        if (err.message.includes('TASK_NOT_FOUND')) {
+          res.status(404).json({ error: 'TASK_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'DELETE_TASK_FAILED', message: err.message });
+      }
+    }
+  );
+
   return {
     app,
     appDb,
@@ -563,5 +1275,9 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     familyService,
     budgetService,
     expenseService,
+    vendorService,
+    shoppingService,
+    giftService,
+    checklistService,
   };
 };

@@ -1,8 +1,8 @@
 # ShaadiSaathi &bull; Testing Strategy & Verification Report
 
 **Date:** 2026-11-01  
-**Phase:** Phase 3 Real Wedding Budget & Expense Management &bull; Test Pass Rate: **100% (43/43 Passed)**  
-**Linter Status:** **0 Errors, 0 Warnings** (Oxlint across 65 files)  
+**Phase:** Phase 4 Vendors, Payments, Shopping, Gifts & Checklist &bull; Test Pass Rate: **100% (56/56 Passed)**  
+**Linter Status:** **0 Errors, 0 Warnings** (Oxlint across 74 files)  
 **TypeScript Status:** **0 Compilation Errors** (`npx tsc --noEmit` and `npx tsc -b`)  
 **Production Build:** **100% Succeeded** (`dist/` + PWA Service Worker precached)
 
@@ -40,9 +40,26 @@ npm run build
 
 ---
 
-## 3. Test Suites Overview & Verification Matrix (43/43 Tests Passing)
+## 3. Test Suites Overview & Verification Matrix (56/56 Tests Passing)
 
-### Suite 1: `server/test/budget-expenses.test.ts` (15 Backend Integration Tests)
+### Suite 1: `server/test/phase4-modules.test.ts` (8 Backend Integration Tests)
+- [x] **Vendor Management CRUD:** Creates, reads, updates, and deletes vendors with exact integer paise precision.
+- [x] **Vendor Input Validation:** Rejects invalid, negative, or malformed inputs on vendor creation and modification.
+- [x] **Vendor Payment Tracking & Zero Double-Counting:** Records payments transactionally, updates advance and balance due, blocks overpayments beyond agreed price, and links to operational expenses safely.
+- [x] **Shopping Register & Variance Analysis:** Manages shopping items, categories, priorities, deadlines, and computes estimated vs actual variance.
+- [x] **Sacred Gifts & Shagun Ledger:** Records cash and physical gifts, computes separate summary metrics, and strictly preserves expense decoupling.
+- [x] **Wedding Checklist & Timeline:** Manages time-phased tasks across 6 preparation stages, toggles completion, and calculates real progress percentages.
+- [x] **Multi-Tenancy Isolation:** Strictly prevents Family B from viewing or mutating Family A vendors, shopping items, gifts, or checklist tasks.
+- [x] **Server-Side RBAC Enforcement:** Strictly blocks VIEWER role from creating, updating, or deleting Phase 4 records.
+
+### Suite 2: `src/test/Phase4Flow.test.tsx` (5 Frontend Integration Tests)
+- [x] **Vendors & Contracts Screen:** Renders contract totals, advance metrics, search, zero-fake payment guarantee alert, and opens Add Vendor modal.
+- [x] **Shopping Register Screen:** Renders shopping items, status tabs, variance analysis metrics, and opens Add Shopping Item modal.
+- [x] **Sacred Gifts & Shagun Screen:** Renders sacred cultural separation banner, cash vs physical metrics, and opens Record Shagun modal.
+- [x] **Wedding Checklist Screen:** Renders phase timeline tabs, completion progress bar, priority filters, and opens Add Task modal.
+- [x] **Bilingual Switching on Phase 4 Screens:** Seamless English-to-Hindi toggle for all Phase 4 headings, filters, and actions.
+
+### Suite 3: `server/test/budget-expenses.test.ts` (15 Backend Integration Tests)
 - [x] **Budget Retrieval:** Fetches family budget accurately defaulting to INR (₹) and zero paise.
 - [x] **Budget Precision & RBAC:** Allows OWNER and FAMILY_MEMBER to update budget with exact integer paise precision.
 - [x] **Budget Validation:** Rejects negative amounts, non-numeric values, or values exceeding ₹100 Crores with HTTP 400.
@@ -117,6 +134,6 @@ npm run build
 ## 5. Build & Code Quality Summary
 
 - **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit` & `npx tsc -b`)
-- **Oxlint AST Analysis:** 0 errors, 0 warnings (65 files checked)
-- **Vitest Test Suite:** 43 passed (7 test files, 100% passing)
+- **Oxlint AST Analysis:** 0 errors, 0 warnings (74 files checked)
+- **Vitest Test Suite:** 56 passed (9 test files, 100% passing)
 - **PWA Production Build:** Complete bundle generated in `dist/` with valid web manifest and service worker.

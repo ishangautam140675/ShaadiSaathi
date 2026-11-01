@@ -88,6 +88,28 @@ Built with a dedicated luxury Indian wedding palette:
    - `OWNER` & `FAMILY_MEMBER` can create, update, and delete; `VIEWER` is strictly read-only.
    - Complete audit trail (`expense_audit_logs`) tracking mutations with user IDs and timestamps.
 
+### Phase 4: Vendors, Payment Tracking, Shopping, Gifts & Checklist
+1. **Complete Vendor Lifecycle Management:**
+   - Full CRUD for catering, venue, decor, photography, makeup, clothing, sound, and invitations.
+   - Agreed price, advances paid, balance due, and next payment due date tracking.
+   - Zero-fake-payment guarantee: clear honest disclosure that direct gateway processing is not offered, ensuring families log real bank transfers and receipts.
+2. **Transactional Vendor Payment Logging & Expense Linking:**
+   - Record payments against vendors with date, mode, transaction reference, and optional expense linking.
+   - Strict validation: overpayments exceeding the agreed price are rejected.
+   - **Zero double-counting accounting model**: vendor agreements do not inflate budget commitments until disbursements are logged.
+3. **Wedding Shopping Register & Variance Analysis:**
+   - Wardrobe, jewellery, and trousseau tracking with quantities, store names, deadlines, and assigned family members.
+   - Dynamic estimated vs actual variance analysis highlighting budget over/under-runs and overdue purchase alerts.
+4. **Sacred Gifts & Shagun Register (Culturally Decoupled):**
+   - Traditional auspicious Shagun cash envelopes (लिफ़ाफ़ा) and physical gifts/jewellery tracking.
+   - **Strict cultural decoupling**: Shagun blessings are kept in a separate sacred ledger and are NEVER subtracted from operational wedding expenses or budget deficits.
+5. **Wedding Checklist & Timeline:**
+   - Time-phased duties from 6 months before, 3 months before, 1 month before, wedding week, day-of, and post-wedding.
+   - Real completion percentages and dynamic phase progress indicators.
+6. **Multi-Tenancy & RBAC Protection:**
+   - Strict `family_id` tenant isolation across all Phase 4 tables.
+   - VIEWER role enforces read-only guards on both frontend and server.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -100,7 +122,7 @@ Built with a dedicated luxury Indian wedding palette:
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
 - **PWA:** `vite-plugin-pwa`
-- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (43 automated tests across 7 suites)
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (56 automated tests across 9 suites)
 - **Linter:** Oxlint (0 errors, 0 warnings)
 
 ---
