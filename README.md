@@ -64,6 +64,30 @@ Built with a dedicated luxury Indian wedding palette:
 6. **Brute-Force Rate Limiting:**
    - Sliding-window rate limiter protecting `/api/auth/sign-in` (5 attempts per 15-minute window).
 
+### Phase 3: Real Wedding Budget and Expense Management
+1. **Total Wedding Budget Management:**
+   - Set and update authoritative total family wedding budget.
+   - Strictly validated against non-negative amounts, invalid characters, and capped at ₹100 Crores.
+   - Default currency set explicitly to INR (₹).
+   - Creator and timestamp audit tracking with optimistic UI updates.
+2. **Integer Paise Financial Precision:**
+   - Authoritative monetary values are stored as integer paise (`amount_paise`, `paid_amount_paise`, `outstanding_balance_paise`).
+   - Prevents IEEE 754 floating-point inaccuracies. Formatted rupee outputs are produced only at API boundaries.
+3. **Full Expense CRUD Operations:**
+   - **Create:** Log wedding expenditures with title, exact amount, category, date, payer, optional vendor, payment method (`cash`, `upi`, `card`, `bank_transfer`, `other`), and notes.
+   - **Partial Payments:** Support upfront partial deposits (`paidAmount`) with automatic calculation of outstanding balance (`amount - paidAmount`) and statuses (`paid`, `partially_paid`, `pending`).
+   - **Read:** Search expenses by keyword, filter by category or payment status, and sort by date or amount.
+   - **Update:** Real-time editing of expense records with live balance calculation and audit logging.
+   - **Delete:** Accessible confirmation dialog before permanently removing an expense record.
+4. **Authoritative Financial Summaries:**
+   - Real-time computations: Total Budget, Total Committed (`SUM(amount)`), Total Paid (`SUM(paid_amount)`), Total Outstanding (`SUM(outstanding)`), Remaining Runway (`budget - committed`), Cash Remaining (`budget - paid`), and Budget Utilization (`%`).
+   - Category-wise breakdown with zero double-counting.
+5. **Multi-Tenancy & RBAC Security:**
+   - Strict `family_id` data isolation: zero cross-family data leakage.
+   - Deny-by-default access: unauthenticated requests receive HTTP 401.
+   - `OWNER` & `FAMILY_MEMBER` can create, update, and delete; `VIEWER` is strictly read-only.
+   - Complete audit trail (`expense_audit_logs`) tracking mutations with user IDs and timestamps.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -76,7 +100,7 @@ Built with a dedicated luxury Indian wedding palette:
 - **Navigation:** React Router v7
 - **Icons:** Lucide React
 - **PWA:** `vite-plugin-pwa`
-- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (23 automated tests)
+- **Testing:** Vitest, React Testing Library, Supertest, JSDOM (43 automated tests across 7 suites)
 - **Linter:** Oxlint (0 errors, 0 warnings)
 
 ---

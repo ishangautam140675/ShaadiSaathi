@@ -5,6 +5,8 @@ import { AppDatabase, getDatabase } from './db/database.ts';
 import { AuthService } from './services/authService.ts';
 import { InvitationService } from './services/invitationService.ts';
 import { FamilyService } from './services/familyService.ts';
+import { BudgetService } from './services/budgetService.ts';
+import { ExpenseService, type ExpenseCategory, type PaymentStatus } from './services/expenseService.ts';
 import { createAuthMiddleware, type AuthenticatedRequest } from './middleware/authMiddleware.ts';
 import { requireRoles } from './middleware/rbacMiddleware.ts';
 import { createRateLimitMiddleware, clearRateLimit } from './middleware/rateLimitMiddleware.ts';
@@ -15,6 +17,8 @@ export interface AppContext {
   authService: AuthService;
   invitationService: InvitationService;
   familyService: FamilyService;
+  budgetService: BudgetService;
+  expenseService: ExpenseService;
 }
 
 export const createServerApp = (customDb?: AppDatabase): AppContext => {
@@ -24,6 +28,8 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
   const authService = new AuthService(appDb);
   const invitationService = new InvitationService(appDb);
   const familyService = new FamilyService(appDb);
+  const budgetService = new BudgetService(appDb);
+  const expenseService = new ExpenseService(appDb);
 
   const authMiddleware = createAuthMiddleware(authService);
   const rateLimitMiddleware = createRateLimitMiddleware(appDb);
@@ -336,11 +342,226 @@ export const createServerApp = (customDb?: AppDatabase): AppContext => {
     }
   );
 
+  // -------------------------------------------------------------
+  // 5. Wedding Budget Management Routes (Phase 3)
+  // -------------------------------------------------------------
+  app.get('/api/budget', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const budget = budgetService.getBudget(req.user!.family_id);
+      res.json(budget);
+    } catch (err: any) {
+      res.status(500).json({ error: 'BUDGET_FETCH_FAILED', message: err.message });
+    }
+  });
+
+  app.put(
+    '/api/budget',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const { totalBudget } = req.body;
+        if (totalBudget === undefined || totalBudget === null) {
+          res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Total budget amount is required.' });
+          return;
+        }
+
+        const numericBudget = typeof totalBudget === 'string' ? parseFloat(totalBudget) : Number(totalBudget);
+        const updated = budgetService.updateBudget(req.user!.family_id, req.user!.id, numericBudget);
+
+        res.json({
+          message: 'Wedding budget updated successfully.',
+          budget: updated,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'BUDGET_UPDATE_FAILED', message: err.message });
+      }
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 6. Expense Management CRUD Routes (Phase 3)
+  // -------------------------------------------------------------
+  app.get('/api/expenses', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const {
+        search,
+        category,
+        paymentStatus,
+        startDate,
+        endDate,
+        paidByName,
+        sortBy,
+        sortOrder,
+        page,
+        limit,
+      } = req.query;
+
+      const result = expenseService.listExpenses(req.user!.family_id, {
+        search: search as string | undefined,
+        category: category as ExpenseCategory | undefined,
+        paymentStatus: paymentStatus as PaymentStatus | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        paidByName: paidByName as string | undefined,
+        sortBy: sortBy as 'date' | 'amount' | 'created_at' | undefined,
+        sortOrder: sortOrder as 'asc' | 'desc' | undefined,
+        page: page ? parseInt(page as string, 10) : undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: 'EXPENSES_FETCH_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/expenses/summary', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = expenseService.getFinancialSummary(req.user!.family_id);
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ error: 'SUMMARY_FETCH_FAILED', message: err.message });
+    }
+  });
+
+  app.get('/api/expenses/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const expense = expenseService.getExpenseById(req.user!.family_id, req.params.id as string);
+      res.json(expense);
+    } catch (err: any) {
+      res.status(404).json({ error: 'EXPENSE_NOT_FOUND', message: err.message });
+    }
+  });
+
+  app.post(
+    '/api/expenses',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          title,
+          amount,
+          paidAmount,
+          category,
+          date,
+          paidByName,
+          vendorName,
+          paymentMethod,
+          paymentStatus,
+          notes,
+        } = req.body;
+
+        const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+        const numericPaidAmount = paidAmount !== undefined && paidAmount !== null && paidAmount !== ''
+          ? (typeof paidAmount === 'string' ? parseFloat(paidAmount) : Number(paidAmount))
+          : undefined;
+
+        const expense = expenseService.createExpense(req.user!.family_id, req.user!.id, {
+          title,
+          amount: numericAmount,
+          paidAmount: numericPaidAmount,
+          category,
+          date,
+          paidByName,
+          vendorName,
+          paymentMethod,
+          paymentStatus,
+          notes,
+        });
+
+        res.status(201).json({
+          message: 'Expense successfully recorded.',
+          expense,
+        });
+      } catch (err: any) {
+        res.status(400).json({ error: 'EXPENSE_CREATION_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.put(
+    '/api/expenses/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const {
+          title,
+          amount,
+          paidAmount,
+          category,
+          date,
+          paidByName,
+          vendorName,
+          paymentMethod,
+          paymentStatus,
+          notes,
+        } = req.body;
+
+        const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+        const numericPaidAmount = paidAmount !== undefined && paidAmount !== null && paidAmount !== ''
+          ? (typeof paidAmount === 'string' ? parseFloat(paidAmount) : Number(paidAmount))
+          : undefined;
+
+        const updated = expenseService.updateExpense(
+          req.user!.family_id,
+          req.user!.id,
+          req.params.id as string,
+          {
+            title,
+            amount: numericAmount,
+            paidAmount: numericPaidAmount,
+            category,
+            date,
+            paidByName,
+            vendorName,
+            paymentMethod,
+            paymentStatus,
+            notes,
+          }
+        );
+
+        res.json({
+          message: 'Expense successfully updated.',
+          expense: updated,
+        });
+      } catch (err: any) {
+        if (err.message.includes('EXPENSE_NOT_FOUND')) {
+          res.status(404).json({ error: 'EXPENSE_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'EXPENSE_UPDATE_FAILED', message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/expenses/:id',
+    authMiddleware,
+    requireRoles('OWNER', 'FAMILY_MEMBER'),
+    (req: AuthenticatedRequest, res: Response) => {
+      try {
+        expenseService.deleteExpense(req.user!.family_id, req.user!.id, req.params.id as string);
+        res.json({ message: 'Expense record successfully deleted.' });
+      } catch (err: any) {
+        if (err.message.includes('EXPENSE_NOT_FOUND')) {
+          res.status(404).json({ error: 'EXPENSE_NOT_FOUND', message: err.message });
+          return;
+        }
+        res.status(400).json({ error: 'EXPENSE_DELETION_FAILED', message: err.message });
+      }
+    }
+  );
+
   return {
     app,
     appDb,
     authService,
     invitationService,
     familyService,
+    budgetService,
+    expenseService,
   };
 };

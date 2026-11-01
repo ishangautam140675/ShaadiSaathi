@@ -1,6 +1,6 @@
 # ShaadiSaathi &bull; Project Architecture Document
 
-**Version:** 2.0.0-phase2  
+**Version:** 3.0.0-phase3  
 **Project:** ShaadiSaathi (शादीसाथी) &bull; Premium Bilingual Wedding Management Progressive Web App  
 **Tagline:** "Every Moment Special. Every Rupee Accounted For." / "हर पल ख़ास, हर रुपये का हिसाब।"
 
@@ -159,7 +159,66 @@ CREATE TABLE rate_limits (
   first_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_attempt_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- 6. Wedding Expenses (Phase 3 Real Database Persistence)
+CREATE TABLE expenses (
+  id TEXT PRIMARY KEY,
+  family_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  amount REAL NOT NULL,
+  paid_amount_paise INTEGER NOT NULL DEFAULT 0,
+  paid_amount REAL NOT NULL DEFAULT 0,
+  outstanding_balance_paise INTEGER NOT NULL DEFAULT 0,
+  outstanding_balance REAL NOT NULL DEFAULT 0,
+  category TEXT NOT NULL,
+  date TEXT NOT NULL,
+  paid_by_name TEXT NOT NULL,
+  paid_by_user_id TEXT,
+  vendor_name TEXT,
+  payment_method TEXT NOT NULL DEFAULT 'other',
+  payment_status TEXT NOT NULL DEFAULT 'pending',
+  notes TEXT,
+  created_by_user_id TEXT NOT NULL,
+  updated_by_user_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (paid_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 7. Expense Audit Trail (Phase 3)
+CREATE TABLE expense_audit_logs (
+  id TEXT PRIMARY KEY,
+  expense_id TEXT NOT NULL,
+  family_id TEXT NOT NULL,
+  action TEXT NOT NULL, -- 'CREATE', 'UPDATE', 'DELETE'
+  changed_by_user_id TEXT NOT NULL,
+  changes_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+  FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
+
+### Financial Precision & Monetary Architecture (Phase 3)
+
+1. **Integer Paise Storage:** All monetary inputs are immediately converted to integer paise (`1 INR = 100 paise`). SQLite `INTEGER` columns store `amount_paise`, `paid_amount_paise`, and `outstanding_balance_paise`. All additions, subtractions, and aggregations run exclusively on integer paise to completely prevent IEEE 754 floating-point inaccuracies. Formatted rupee outputs (`amount_paise / 100`) are provided only at API presentation boundaries.
+2. **Authoritative Financial Metrics Formulas:**
+   - **Total Budget:** Family's authoritative target budget (`total_budget_paise`).
+   - **Total Committed:** Exact sum of all logged expenditures: `SUM(amount_paise)`.
+   - **Total Paid:** Actual cash settled to vendors/shops: `SUM(paid_amount_paise)`.
+   - **Total Outstanding:** Unsettled obligations: `SUM(amount_paise - paid_amount_paise)`.
+   - **Remaining Budget (Runway):** Available expenditure ceiling: `total_budget_paise - total_committed_paise`.
+   - **Cash Remaining:** Undisbursed liquidity: `total_budget_paise - total_paid_paise`.
+   - **Budget Utilization:** Percentage of budget committed: `(total_committed_paise / total_budget_paise) * 100`.
+3. **Multi-Tenancy & Authorization Isolation:**
+   - Every read, write, update, and delete query requires `family_id` strictly derived from the caller's verified session.
+   - Cross-family access is mathematically rejected; attempts to read or mutate another family's expense returns HTTP 404/403.
+   - `OWNER` and `FAMILY_MEMBER` roles can create, update, and delete expenses; `VIEWER` is strictly read-only.
+   - Audit trail automatically records every mutation with user IDs, timestamps, and JSON diffs.
 
 ### Authentication & RBAC Security Guarantees
 
@@ -178,7 +237,7 @@ CREATE TABLE rate_limits (
 |---|---|---|---|
 | **Phase 1** | Foundation, Design System & Responsive Shell | **COMPLETED** | PWA foundation, 10 screens, bilingual i18n (EN/HI), luxury palette, Vitest test suite. |
 | **Phase 2** | Secure Authentication, Family Invitations & RBAC | **COMPLETED** | Native Node/SQLite database, multi-device sessions, Scrypt hashing, invite-only onboarding, role enforcement, 23 automated tests. |
-| **Phase 3** | Wedding Budget, Expenses & Vendor Persistence | Planned | Real database CRUD operations for expenses, vendor advances, shopping lists, and Shagun registers. |
+| **Phase 3** | Wedding Budget, Expenses & Real Database Persistence | **COMPLETED** | Real SQLite database CRUD for wedding budget & expenses, integer paise precision, partial payments, search/filter/pagination, audit trail, 43 automated tests. |
 | **Phase 4** | Offline IndexedDB Engine & Sync Conflict Handler | Planned | Background synchronization, optimistic UI updates, conflict resolution with vector clocks. |
 | **Phase 5** | Advanced Financial Reports & PDF / Excel Export | Planned | Printable audit reports for wedding accountants, category analysis, spreadsheet exports. |
 | **Phase 6** | SmartScan Receipt Verification & Free-Tier OCR | Planned | Client-side Tesseract.js / WebAssembly image preprocessing and side-by-side verification. |

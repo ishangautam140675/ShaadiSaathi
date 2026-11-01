@@ -5,31 +5,73 @@ export type Language = 'en' | 'hi';
 export type ExpenseCategory =
   | 'venue'
   | 'catering'
+  | 'decoration'
+  | 'clothing'
+  | 'jewellery'
+  | 'photography'
+  | 'invitations'
+  | 'makeup'
+  | 'transport'
+  | 'gifts'
+  | 'other'
   | 'attire'
   | 'jewelry'
-  | 'photography'
   | 'decor'
   | 'music_entertainment'
   | 'logistics_travel'
   | 'invitations_gifts'
   | 'miscellaneous';
 
-export type PaymentStatus = 'paid' | 'pending' | 'partial';
-export type PaymentMode = 'cash' | 'upi' | 'bank_transfer' | 'cheque' | 'card';
+export type PaymentStatus = 'paid' | 'partially_paid' | 'pending' | 'partial';
+export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'other' | 'cheque';
+export type PaymentMode = PaymentMethod;
 
 export interface Expense {
   id: string;
   title: string;
   amount: number;
+  amountPaise?: number;
+  paidAmount?: number;
+  paidAmountPaise?: number;
+  outstandingBalance?: number;
   category: ExpenseCategory;
   date: string;
   paidBy: string;
+  paidByName?: string;
   paidTo?: string;
+  vendorName?: string | null;
   paymentMode: PaymentMode;
+  paymentMethod?: PaymentMethod;
   status: PaymentStatus;
-  notes?: string;
-  side: 'groom' | 'bride' | 'mutual';
+  paymentStatus?: PaymentStatus;
+  notes?: string | null;
+  side?: 'groom' | 'bride' | 'mutual';
   receiptAttached?: boolean;
+}
+
+export interface ExpenseEntity {
+  id: string;
+  familyId: string;
+  title: string;
+  amount: number;
+  amountPaise: number;
+  paidAmount: number;
+  paidAmountPaise: number;
+  outstandingBalance: number;
+  outstandingBalancePaise: number;
+  category: ExpenseCategory;
+  date: string;
+  paidByName: string;
+  paidByUserId?: string | null;
+  vendorName?: string | null;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  notes?: string | null;
+  side?: 'groom' | 'bride' | 'mutual' | string;
+  createdByUserId: string;
+  updatedByUserId?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BudgetItem {
@@ -38,20 +80,21 @@ export interface BudgetItem {
   spentAmount: number;
 }
 
-export type ShoppingStatus = 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
-
-export interface ShoppingItem {
+export interface ShoppingStatusItem {
   id: string;
   title: string;
   category: 'bride' | 'groom' | 'family' | 'pooja_ceremony' | 'return_gifts' | 'other';
   estimatedPrice: number;
   actualPrice?: number;
-  status: ShoppingStatus;
+  status: 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
   assignedTo: string;
   storeName?: string;
   notes?: string;
   urgency: 'high' | 'medium' | 'low';
 }
+
+export type ShoppingStatus = 'to_buy' | 'in_tailoring' | 'purchased' | 'cancelled';
+export type ShoppingItem = ShoppingStatusItem;
 
 export interface Vendor {
   id: string;
@@ -111,4 +154,33 @@ export interface WeddingSummary {
   remainingBudget: number;
   totalPendingPayments: number;
   budgetUtilizationPct: number;
+}
+
+export interface FinancialSummaryData {
+  totalBudget: number;
+  totalBudgetPaise: number;
+  totalCommitted: number;
+  totalCommittedPaise: number;
+  totalPaid: number;
+  totalPaidPaise: number;
+  totalOutstanding: number;
+  totalOutstandingPaise: number;
+  remainingBudget: number;
+  remainingBudgetPaise: number;
+  cashRemaining: number;
+  cashRemainingPaise: number;
+  budgetUtilizationPercentage: number;
+  totalExpenseCount: number;
+  categoryBreakdown: Array<{
+    category: ExpenseCategory;
+    totalAmount: number;
+    totalAmountPaise: number;
+    totalPaid: number;
+    totalPaidPaise: number;
+    totalOutstanding: number;
+    totalOutstandingPaise: number;
+    count: number;
+    percentageOfTotal: number;
+  }>;
+  recentExpenses: ExpenseEntity[];
 }

@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from '../context/LanguageContext';
 import { useWedding } from '../context/WeddingContext';
+import { useAuth } from '../context/useAuth';
 import { MetricCard } from '../components/common/MetricCard';
 import { Badge } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 import { AddExpenseModal } from '../components/modals/AddExpenseModal';
+import { EditBudgetModal } from '../components/modals/EditBudgetModal';
 import { RecordShagunModal } from '../components/modals/RecordShagunModal';
 import { PhaseNoticeModal } from '../components/common/PhaseNoticeModal';
 import {
@@ -33,8 +35,11 @@ export const DashboardPage: React.FC = () => {
     togglePreviewMode,
     toggleTaskCompletion,
   } = useWedding();
+  const { user } = useAuth();
+  const isViewer = user?.role === 'VIEWER';
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isEditBudgetOpen, setIsEditBudgetOpen] = useState(false);
   const [isShagunModalOpen, setIsShagunModalOpen] = useState(false);
   const [isTaskNoticeOpen, setIsTaskNoticeOpen] = useState(false);
   const [isScanNoticeOpen, setIsScanNoticeOpen] = useState(false);
@@ -94,6 +99,17 @@ export const DashboardPage: React.FC = () => {
             subtitle={`${summary.brideName} & ${summary.groomName}`}
             icon={<Wallet className="w-5 h-5" />}
             variant="burgundy"
+            badge={
+              !isViewer && !isPreviewMode ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditBudgetOpen(true)}
+                  className="px-2 py-0.5 rounded text-[11px] font-semibold text-gold-light hover:text-white bg-burgundy-dark/60 hover:bg-burgundy-dark cursor-pointer transition-colors"
+                >
+                  {t.expenses.editBudgetBtn}
+                </button>
+              ) : undefined
+            }
           />
 
           {/* Total Expenses Paid */}
@@ -281,48 +297,66 @@ export const DashboardPage: React.FC = () => {
             />
           ) : (
             <div className="bg-ivory-light rounded-2xl border border-gold/30 divide-y divide-gold/20 card-shadow overflow-hidden">
-              {recentExpenses.map((exp) => (
-                <div
-                  key={exp.id}
-                  className="p-4 flex items-center justify-between gap-3 hover:bg-rose-light/30 transition-colors"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-burgundy/10 text-burgundy flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-xs uppercase">
-                      {exp.category.slice(0, 2)}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-charcoal truncate">
-                        {exp.title}
-                      </h3>
-                      <div className="flex items-center gap-2 text-xs text-charcoal-muted mt-0.5 flex-wrap">
-                        <span>{exp.date}</span>
-                        <span>&bull;</span>
-                        <span className="truncate">{exp.paidBy}</span>
-                        <span>&bull;</span>
-                        <Badge
-                          variant={exp.side === 'bride' ? 'rose' : exp.side === 'groom' ? 'gold' : 'sage'}
-                          size="sm"
-                        >
-                          {exp.side === 'bride' ? t.common.brideSide : exp.side === 'groom' ? t.common.groomSide : t.common.mutual}
-                        </Badge>
+              {recentExpenses.map((exp) => {
+                const payer = ('paidByName' in exp && exp.paidByName) || ('paidBy' in exp && exp.paidBy) || '';
+                const currentStatus = ('paymentStatus' in exp && exp.paymentStatus) || exp.status;
+                return (
+                  <div
+                    key={exp.id}
+                    className="p-4 flex items-center justify-between gap-3 hover:bg-rose-light/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-burgundy/10 text-burgundy flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-xs uppercase">
+                        {exp.category.slice(0, 2)}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-charcoal truncate">
+                          {exp.title}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-charcoal-muted mt-0.5 flex-wrap">
+                          <span>{exp.date}</span>
+                          <span>&bull;</span>
+                          <span className="truncate">{payer}</span>
+                          {exp.side && (
+                            <>
+                              <span>&bull;</span>
+                              <Badge
+                                variant={exp.side === 'bride' ? 'rose' : exp.side === 'groom' ? 'gold' : 'sage'}
+                                size="sm"
+                              >
+                                {exp.side === 'bride' ? t.common.brideSide : exp.side === 'groom' ? t.common.groomSide : t.common.mutual}
+                              </Badge>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="text-right flex-shrink-0">
-                    <span className="text-sm sm:text-base font-bold text-burgundy block">
-                      {formatCurrency(exp.amount)}
-                    </span>
-                    <Badge
-                      variant={exp.status === 'paid' ? 'sage' : exp.status === 'partial' ? 'gold' : 'rose'}
-                      size="sm"
-                      className="mt-1"
-                    >
-                      {exp.status === 'paid' ? t.expenses.paid : exp.status === 'partial' ? t.expenses.partial : t.expenses.pending}
-                    </Badge>
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-sm sm:text-base font-bold text-burgundy block">
+                        {formatCurrency(exp.amount)}
+                      </span>
+                      <Badge
+                        variant={
+                          currentStatus === 'paid'
+                            ? 'sage'
+                            : currentStatus === 'partially_paid' || currentStatus === 'partial'
+                            ? 'gold'
+                            : 'rose'
+                        }
+                        size="sm"
+                        className="mt-1"
+                      >
+                        {currentStatus === 'paid'
+                          ? t.expenses.paid
+                          : currentStatus === 'partially_paid' || currentStatus === 'partial'
+                          ? t.expenses.partial
+                          : t.expenses.pending}
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -424,6 +458,12 @@ export const DashboardPage: React.FC = () => {
       <AddExpenseModal
         isOpen={isExpenseModalOpen}
         onClose={() => setIsExpenseModalOpen(false)}
+      />
+
+      <EditBudgetModal
+        isOpen={isEditBudgetOpen}
+        onClose={() => setIsEditBudgetOpen(false)}
+        currentBudget={summary.totalBudget}
       />
 
       <RecordShagunModal

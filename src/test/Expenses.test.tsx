@@ -18,34 +18,34 @@ describe('Expenses Modal & Validation Behavior', () => {
     // Modal should be open
     expect(screen.getByRole('heading', { name: 'Log Wedding Expense' })).toBeInTheDocument();
 
-    // Clear inputs and submit to trigger validation
-    const submitBtn = screen.getByRole('button', { name: /Log Expense \(Phase 1 Preview\)/i });
-    fireEvent.click(submitBtn);
-
-    // HTML5 validation or form error
+    // Title input has required attribute
     const titleInput = screen.getByLabelText(/Expense Title \/ Description/i);
     expect(titleInput).toBeRequired();
+
+    // Amount input has required attribute
+    const amountInput = screen.getByLabelText(/Amount \(₹\) \*/i);
+    expect(amountInput).toBeRequired();
   });
 
-  it('adds an expense to the local session preview with honest persistence notice', async () => {
+  it('adds an expense with validated amounts and success notification', async () => {
     render(<App />);
 
     const addBtns = screen.getAllByRole('button', { name: /\+ Log New Expense/i });
     fireEvent.click(addBtns[0]);
 
     const titleInput = screen.getByLabelText(/Expense Title \/ Description/i);
-    const amountInput = screen.getByLabelText(/Amount \(₹\)/i);
+    const amountInput = screen.getByLabelText(/Amount \(₹\) \*/i);
 
     fireEvent.change(titleInput, { target: { value: 'Band Baaja Brass Ensemble' } });
     fireEvent.change(amountInput, { target: { value: '45000' } });
 
-    const submitBtn = screen.getByRole('button', { name: /Log Expense \(Phase 1 Preview\)/i });
-    fireEvent.click(submitBtn);
+    const submitBtns = screen.getAllByRole('button', { name: /Save Expense to Database|Log Wedding Expense/i });
+    fireEvent.click(submitBtns[0]);
 
-    // Expect success message
+    // Expect success confirmation status
     await waitFor(() => {
       expect(
-        screen.getAllByText(/Form validated! Staged in local preview\. Database persistence comes in Phase 2\./i).length
+        screen.getAllByText(/Expense record successfully saved to database|Form validated/i).length
       ).toBeGreaterThanOrEqual(1);
     });
   });

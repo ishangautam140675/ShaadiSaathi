@@ -72,6 +72,56 @@ if (!global.fetch || typeof global.fetch !== 'function' || vi.isMockFunction(glo
         }),
       });
     }
+    if (urlStr.includes('/api/budget')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          totalBudget: 2500000,
+          totalBudgetPaise: 250000000,
+          currency: 'INR',
+          updatedAt: '2026-11-01T00:00:00.000Z',
+          budgetUpdatedByUserId: null,
+        }),
+      });
+    }
+    if (urlStr.includes('/api/expenses/summary')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          totalBudget: 2500000,
+          totalBudgetPaise: 250000000,
+          totalCommitted: 0,
+          totalCommittedPaise: 0,
+          totalPaid: 0,
+          totalPaidPaise: 0,
+          totalOutstanding: 0,
+          totalOutstandingPaise: 0,
+          remainingBudget: 2500000,
+          remainingBudgetPaise: 250000000,
+          cashRemaining: 2500000,
+          cashRemainingPaise: 250000000,
+          budgetUtilizationPercentage: 0,
+          totalExpenseCount: 0,
+          categoryBreakdown: [],
+          recentExpenses: [],
+        }),
+      });
+    }
+    if (urlStr.includes('/api/expenses')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          expenses: [],
+          totalCount: 0,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        }),
+      });
+    }
     return Promise.resolve({
       ok: true,
       status: 200,

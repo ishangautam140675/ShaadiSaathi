@@ -88,10 +88,13 @@ export class AuthService {
 
     const { hash, salt } = CryptoService.hashPassword(data.adminPassword);
 
+    const totalBudget = data.totalBudget || 2500000;
+    const totalBudgetPaise = Math.round(totalBudget * 100);
+
     // Insert Family
     const insertFamily = this.appDb.db.prepare(`
-      INSERT INTO families (id, name, bride_name, groom_name, wedding_date, total_budget, currency, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO families (id, name, bride_name, groom_name, wedding_date, total_budget, total_budget_paise, currency, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     insertFamily.run(
@@ -100,7 +103,8 @@ export class AuthService {
       data.brideName.trim(),
       data.groomName.trim(),
       data.weddingDate,
-      data.totalBudget || 2500000,
+      totalBudget,
+      totalBudgetPaise,
       'INR',
       now,
       now
